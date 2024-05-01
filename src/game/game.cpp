@@ -14,6 +14,8 @@
 #include "lua/creature/actions.hpp"
 #include "items/bed.hpp"
 #include "creatures/creature.hpp"
+#include "creatures/creatures_definitions.hpp"
+#include "lua/creature/creatureevent.hpp"
 #include "database/databasetasks.hpp"
 #include "lua/creature/events.hpp"
 #include "lua/callbacks/event_callback.hpp"
@@ -53,6 +55,11 @@
 
 #include <appearances.pb.h>
 
+import enum_modules;
+import outfit_type;
+import light_info;
+import game_movement;
+
 enum class HighscoreCategories_t : uint8_t {
 	EXPERIENCE = 0,
 	FIST_FIGHTING = 1,
@@ -71,32 +78,32 @@ enum class HighscoreCategories_t : uint8_t {
 };
 
 namespace InternalGame {
-	void sendBlockEffect(BlockType_t blockType, CombatType_t combatType, const Position &targetPos, std::shared_ptr<Creature> source) {
-		if (blockType == BLOCK_DEFENSE) {
+	void sendBlockEffect(BlockType blockType, CombatType combatType, const Position &targetPos, std::shared_ptr<Creature> source) {
+		if (blockType == BlockType::Defense) {
 			g_game().addMagicEffect(targetPos, CONST_ME_POFF);
-		} else if (blockType == BLOCK_ARMOR) {
+		} else if (blockType == BlockType::Armor) {
 			g_game().addMagicEffect(targetPos, CONST_ME_BLOCKHIT);
-		} else if (blockType == BLOCK_DODGE) {
+		} else if (blockType == BlockType::Dodge) {
 			g_game().addMagicEffect(targetPos, CONST_ME_DODGE);
-		} else if (blockType == BLOCK_IMMUNITY) {
+		} else if (blockType == BlockType::Immunity) {
 			uint8_t hitEffect = 0;
 			switch (combatType) {
-				case COMBAT_UNDEFINEDDAMAGE: {
+				case CombatType::UndefinedDamage: {
 					return;
 				}
-				case COMBAT_ENERGYDAMAGE:
-				case COMBAT_FIREDAMAGE:
-				case COMBAT_PHYSICALDAMAGE:
-				case COMBAT_ICEDAMAGE:
-				case COMBAT_DEATHDAMAGE: {
+				case CombatType::EnergyDamage:
+				case CombatType::FireDamage:
+				case CombatType::PhysicalDamage:
+				case CombatType::IceDamage:
+				case CombatType::DeathDamage: {
 					hitEffect = CONST_ME_BLOCKHIT;
 					break;
 				}
-				case COMBAT_EARTHDAMAGE: {
+				case CombatType::EarthDamage: {
 					hitEffect = CONST_ME_GREEN_RINGS;
 					break;
 				}
-				case COMBAT_HOLYDAMAGE: {
+				case CombatType::HolyDamage: {
 					hitEffect = CONST_ME_HOLYDAMAGE;
 					break;
 				}
@@ -108,7 +115,7 @@ namespace InternalGame {
 			g_game().addMagicEffect(targetPos, hitEffect);
 		}
 
-		if (blockType != BLOCK_NONE) {
+		if (blockType != BlockType::None) {
 			g_game().sendSingleSoundEffect(targetPos, SoundEffect_t::NO_DAMAGE, source);
 		}
 	}
@@ -1275,7 +1282,7 @@ void Game::playerMoveCreature(std::shared_ptr<Player> player, std::shared_ptr<Cr
 		if (toTile->hasFlag(TILESTATE_BLOCKPATH)) {
 			player->sendCancelMessage(RETURNVALUE_NOTENOUGHROOM);
 			return;
-		} else if ((movingCreature->getZoneType() == ZONE_PROTECTION && !toTile->hasFlag(TILESTATE_PROTECTIONZONE)) || (movingCreature->getZoneType() == ZONE_NOPVP && !toTile->hasFlag(TILESTATE_NOPVPZONE))) {
+		} else if ((movingCreature->getZoneType() == ZoneType::Protection && !toTile->hasFlag(TILESTATE_PROTECTIONZONE)) || (movingCreature->getZoneType() == ZoneType::NoPvp && !toTile->hasFlag(TILESTATE_NOPVPZONE))) {
 			player->sendCancelMessage(RETURNVALUE_NOTPOSSIBLE);
 			return;
 		} else {
@@ -1323,7 +1330,7 @@ ReturnValue Game::internalMoveCreature(std::shared_ptr<Creature> creature, Direc
 	Position destPos = getNextPosition(direction, currentPos);
 	std::shared_ptr<Player> player = creature->getPlayer();
 
-	bool diagonalMovement = (direction & DIRECTION_DIAGONAL_MASK) != 0;
+	bool diagonalMovement = (directionToValue(direction) & directionToValue(Direction::DiagonalMask)) != 0;
 	if (player && !diagonalMovement) {
 		// try go up
 		auto tile = creature->getTile();
@@ -1365,7 +1372,7 @@ ReturnValue Game::internalMoveCreature(std::shared_ptr<Creature> creature, Direc
 
 ReturnValue Game::internalMoveCreature(const std::shared_ptr<Creature> &creature, const std::shared_ptr<Tile> &toTile, uint32_t flags /*= 0*/) {
 	metrics::method_latency measure(__METHOD_NAME__);
-	if (creature->hasCondition(CONDITION_ROOTED)) {
+	if (creature->hasCondition(ConditionType::Rooted)) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
@@ -1375,11 +1382,11 @@ ReturnValue Game::internalMoveCreature(const std::shared_ptr<Creature> &creature
 		return ret;
 	}
 
-	if (creature->hasCondition(CONDITION_ROOTED)) {
+	if (creature->hasCondition(ConditionType::Rooted)) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
-	if (creature->hasCondition(CONDITION_FEARED)) {
+	if (creature->hasCondition(ConditionType::Feared)) {
 		std::shared_ptr<MagicField> field = toTile->getFieldItem();
 		if (field && !field->isBlocking() && field->getDamage() != 0) {
 			return RETURNVALUE_NOTPOSSIBLE;
@@ -1422,7 +1429,7 @@ ReturnValue Game::internalMoveCreature(const std::shared_ptr<Creature> &creature
 		const Position &toPosition = toCylinder->getPosition();
 		if (fromPosition.z != toPosition.z && (fromPosition.x != toPosition.x || fromPosition.y != toPosition.y)) {
 			Direction dir = getDirectionTo(fromPosition, toPosition);
-			if ((dir & DIRECTION_DIAGONAL_MASK) == 0) {
+			if ((directionToValue(dir) & directionToValue(Direction::DiagonalMask)) == 0) {
 				internalCreatureTurn(creature, dir);
 			}
 		}
@@ -3156,7 +3163,7 @@ void Game::playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier /* =
 		return;
 	}
 
-	if (player->hasCondition(CONDITION_FEARED)) {
+	if (player->hasCondition(ConditionType::Feared)) {
 		/*
 		 *	When player is feared the player can´t equip any items.
 		 */
@@ -3260,7 +3267,7 @@ bool Game::playerBroadcastMessage(std::shared_ptr<Player> player, const std::str
 	g_logger().info("{} broadcasted: {}", player->getName(), text);
 
 	for (const auto &it : players) {
-		it.second->sendPrivateMessage(player, TALKTYPE_BROADCAST, text);
+		it.second->sendPrivateMessage(player, TalkType::Broadcast, text);
 	}
 
 	return true;
@@ -4275,10 +4282,10 @@ std::shared_ptr<Item> Game::wrapItem(std::shared_ptr<Item> item, std::shared_ptr
 	newItem->setCustomAttribute("unWrapId", static_cast<int64_t>(oldItemID));
 	newItem->setAttribute(ItemAttribute_t::DESCRIPTION, "Unwrap it in your own house to create a <" + itemName + ">.");
 	if (hiddenCharges > 0) {
-		newItem->setAttribute(DATE, hiddenCharges);
+		newItem->setAttribute(ItemAttribute_t::DATE, hiddenCharges);
 	}
 	if (amount > 0) {
-		newItem->setAttribute(AMOUNT, amount);
+		newItem->setAttribute(ItemAttribute_t::AMOUNT, amount);
 	}
 	newItem->startDecaying();
 	return newItem;
@@ -4289,13 +4296,13 @@ void Game::unwrapItem(std::shared_ptr<Item> item, uint16_t unWrapId, std::shared
 		player->sendCancelMessage(RETURNVALUE_ITEMISNOTYOURS);
 		return;
 	}
-	auto hiddenCharges = item->getAttribute<uint16_t>(DATE);
+	auto hiddenCharges = item->getAttribute<uint16_t>(ItemAttribute_t::DATE);
 	const ItemType &newiType = Item::items.getItemType(unWrapId);
 	if (player != nullptr && house != nullptr && newiType.isBed() && house->getMaxBeds() > -1 && house->getBedCount() >= house->getMaxBeds()) {
 		player->sendCancelMessage("You reached the maximum beds in this house");
 		return;
 	}
-	auto amount = item->getAttribute<uint16_t>(AMOUNT);
+	auto amount = item->getAttribute<uint16_t>(ItemAttribute_t::AMOUNT);
 	if (!amount) {
 		amount = 1;
 	}
@@ -4308,7 +4315,7 @@ void Game::unwrapItem(std::shared_ptr<Item> item, uint16_t unWrapId, std::shared
 			newItem->setSubType(hiddenCharges);
 		}
 		newItem->removeCustomAttribute("unWrapId");
-		newItem->removeAttribute(DESCRIPTION);
+		newItem->removeAttribute(ItemAttribute_t::DESCRIPTION);
 		newItem->startDecaying();
 	}
 }
@@ -4350,7 +4357,7 @@ void Game::playerWriteItem(uint32_t playerId, uint32_t windowTextId, const std::
 		return;
 	}
 
-	for (auto creatureEvent : player->getCreatureEvents(CREATURE_EVENT_TEXTEDIT)) {
+	for (auto creatureEvent : player->getCreatureEvents(CreatureEventType::TextEdit)) {
 		if (!creatureEvent->executeTextEdit(player, writeItem, text)) {
 			player->setWriteItem(nullptr);
 			return;
@@ -5829,7 +5836,7 @@ void Game::playerChangeOutfit(uint32_t playerId, Outfit_t outfit, uint8_t isMoun
 	if (player->canWear(outfit.lookType, outfit.lookAddons)) {
 		player->defaultOutfit = outfit;
 
-		if (player->hasCondition(CONDITION_OUTFIT)) {
+		if (player->hasCondition(ConditionType::Outfit)) {
 			return;
 		}
 
@@ -5857,7 +5864,7 @@ void Game::playerShowQuestLine(uint32_t playerId, uint16_t questId) {
 	g_callbacks().executeCallback(EventCallback_t::playerOnRequestQuestLine, &EventCallback::playerOnRequestQuestLine, player, questId);
 }
 
-void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, const std::string &receiver, const std::string &text) {
+void Game::playerSay(uint32_t playerId, uint16_t channelId, TalkType type, const std::string &receiver, const std::string &text) {
 	std::shared_ptr<Player> player = getPlayerByID(playerId);
 	if (!player) {
 		return;
@@ -5881,39 +5888,39 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, c
 		return;
 	}
 
-	if (type != TALKTYPE_PRIVATE_PN) {
+	if (type != TalkType::PrivatePlayerToNpc) {
 		player->removeMessageBuffer();
 	}
 
 	switch (type) {
-		case TALKTYPE_SAY:
-			internalCreatureSay(player, TALKTYPE_SAY, text, false);
+		case TalkType::Say:
+			internalCreatureSay(player, TalkType::Say, text, false);
 			break;
 
-		case TALKTYPE_WHISPER:
+		case TalkType::Whisper:
 			playerWhisper(player, text);
 			break;
 
-		case TALKTYPE_YELL:
+		case TalkType::Yell:
 			playerYell(player, text);
 			break;
 
-		case TALKTYPE_PRIVATE_TO:
-		case TALKTYPE_PRIVATE_RED_TO:
+		case TalkType::PrivateTo:
+		case TalkType::PrivateRedTo:
 			playerSpeakTo(player, type, receiver, text);
 			break;
 
-		case TALKTYPE_CHANNEL_O:
-		case TALKTYPE_CHANNEL_Y:
-		case TALKTYPE_CHANNEL_R1:
+		case TalkType::ChannelO:
+		case TalkType::ChannelY:
+		case TalkType::ChannelR1:
 			g_chat().talkToChannel(player, type, text, channelId);
 			break;
 
-		case TALKTYPE_PRIVATE_PN:
+		case TalkType::PrivatePlayerToNpc:
 			playerSpeakToNpc(player, text);
 			break;
 
-		case TALKTYPE_BROADCAST:
+		case TalkType::Broadcast:
 			playerBroadcastMessage(player, text);
 			break;
 
@@ -5922,7 +5929,7 @@ void Game::playerSay(uint32_t playerId, uint16_t channelId, SpeakClasses type, c
 	}
 }
 
-bool Game::playerSaySpell(std::shared_ptr<Player> player, SpeakClasses type, const std::string &text) {
+bool Game::playerSaySpell(std::shared_ptr<Player> player, TalkType type, const std::string &text) {
 	if (player->walkExhausted()) {
 		return true;
 	}
@@ -5953,16 +5960,16 @@ void Game::playerWhisper(std::shared_ptr<Player> player, const std::string &text
 	for (const auto &spectator : spectators) {
 		if (const auto &spectatorPlayer = spectator->getPlayer()) {
 			if (!Position::areInRange<1, 1>(player->getPosition(), spectatorPlayer->getPosition())) {
-				spectatorPlayer->sendCreatureSay(player, TALKTYPE_WHISPER, "pspsps");
+				spectatorPlayer->sendCreatureSay(player, TalkType::Whisper, "pspsps");
 			} else {
-				spectatorPlayer->sendCreatureSay(player, TALKTYPE_WHISPER, text);
+				spectatorPlayer->sendCreatureSay(player, TalkType::Whisper, text);
 			}
 		}
 	}
 
 	// event method
 	for (const auto &spectator : spectators) {
-		spectator->onCreatureSay(player, TALKTYPE_WHISPER, text);
+		spectator->onCreatureSay(player, TalkType::Whisper, text);
 	}
 }
 
@@ -5972,31 +5979,31 @@ bool Game::playerYell(std::shared_ptr<Player> player, const std::string &text) {
 		return false;
 	}
 
-	if (player->hasCondition(CONDITION_YELLTICKS)) {
+	if (player->hasCondition(ConditionType::YellTicks)) {
 		player->sendCancelMessage(RETURNVALUE_YOUAREEXHAUSTED);
 		return false;
 	}
 
 	if (player->getAccountType() < AccountType::ACCOUNT_TYPE_GAMEMASTER) {
-		auto condition = Condition::createCondition(CONDITIONID_DEFAULT, CONDITION_YELLTICKS, 30000, 0);
+		auto condition = Condition::createCondition(ConditionId_t::Default, ConditionType::YellTicks, 30000, 0);
 		player->addCondition(condition);
 	}
 
-	internalCreatureSay(player, TALKTYPE_YELL, asUpperCaseString(text), false);
+	internalCreatureSay(player, TalkType::Yell, asUpperCaseString(text), false);
 	return true;
 }
 
-bool Game::playerSpeakTo(std::shared_ptr<Player> player, SpeakClasses type, const std::string &receiver, const std::string &text) {
+bool Game::playerSpeakTo(std::shared_ptr<Player> player, TalkType type, const std::string &receiver, const std::string &text) {
 	std::shared_ptr<Player> toPlayer = getPlayerByName(receiver);
 	if (!toPlayer) {
 		player->sendTextMessage(MESSAGE_FAILURE, "A player with this name is not online.");
 		return false;
 	}
 
-	if (type == TALKTYPE_PRIVATE_RED_TO && (player->hasFlag(PlayerFlags_t::CanTalkRedPrivate) || player->getAccountType() >= AccountType::ACCOUNT_TYPE_GAMEMASTER)) {
-		type = TALKTYPE_PRIVATE_RED_FROM;
+	if (type == TalkType::PrivateRedTo && (player->hasFlag(PlayerFlags_t::CanTalkRedPrivate) || player->getAccountType() >= AccountType::ACCOUNT_TYPE_GAMEMASTER)) {
+		type = TalkType::PrivateRedFrom;
 	} else {
-		type = TALKTYPE_PRIVATE_FROM;
+		type = TalkType::PrivateFrom;
 	}
 
 	toPlayer->sendPrivateMessage(player, type, text);
@@ -6025,11 +6032,11 @@ void Game::playerSpeakToNpc(std::shared_ptr<Player> player, const std::string &t
 	}
 
 	for (const auto &spectator : Spectators().find<Creature>(player->getPosition()).filter<Npc>()) {
-		if (!player->canSpeakWithHireling(spectator->getNpc()->getSpeechBubble())) {
+		if (!player->canSpeakWithHireling(static_cast<uint8_t>(spectator->getNpc()->getSpeechBubble()))) {
 			continue;
 		}
 
-		spectator->getNpc()->onCreatureSay(player, TALKTYPE_PRIVATE_PN, text);
+		spectator->getNpc()->onCreatureSay(player, TalkType::PrivatePlayerToNpc, text);
 	}
 
 	player->updateUIExhausted();
@@ -6067,7 +6074,7 @@ bool Game::internalCreatureTurn(std::shared_ptr<Creature> creature, Direction di
 	return true;
 }
 
-bool Game::internalCreatureSay(std::shared_ptr<Creature> creature, SpeakClasses type, const std::string &text, bool ghostMode, Spectators* spectatorsPtr /* = nullptr*/, const Position* pos /* = nullptr*/) {
+bool Game::internalCreatureSay(std::shared_ptr<Creature> creature, TalkType type, const std::string &text, bool ghostMode, Spectators* spectatorsPtr /* = nullptr*/, const Position* pos /* = nullptr*/) {
 	if (text.empty()) {
 		return false;
 	}
@@ -6083,7 +6090,7 @@ bool Game::internalCreatureSay(std::shared_ptr<Creature> creature, SpeakClasses 
 		// is used if available and if it can be used, else a local vector is
 		// used (hopefully the compiler will optimize away the construction of
 		// the temporary when it's not used).
-		if (type != TALKTYPE_YELL && type != TALKTYPE_MONSTER_YELL) {
+		if (type != TalkType::Yell && type != TalkType::MonsterYell) {
 			spectators.find<Creature>(*pos, false, MAP_MAX_CLIENT_VIEW_PORT_X, MAP_MAX_CLIENT_VIEW_PORT_X, MAP_MAX_CLIENT_VIEW_PORT_Y, MAP_MAX_CLIENT_VIEW_PORT_Y);
 		} else {
 			spectators.find<Creature>(*pos, true, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_X + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2, (MAP_MAX_CLIENT_VIEW_PORT_Y + 1) * 2);
@@ -6312,7 +6319,7 @@ void Game::sendDoubleSoundEffect(const Position &pos, SoundEffect_t mainSoundEff
 }
 
 bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attacker, std::shared_ptr<Creature> target, bool checkDefense, bool checkArmor, bool field) {
-	if (damage.primary.type == COMBAT_NONE && damage.secondary.type == COMBAT_NONE) {
+	if (damage.primary.type == CombatType::None && damage.secondary.type == CombatType::None) {
 		return true;
 	}
 
@@ -6320,7 +6327,7 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 		return true;
 	}
 
-	if (damage.primary.value > 0 || damage.primary.type == COMBAT_AGONYDAMAGE) {
+	if (damage.primary.value > 0 || damage.primary.type == CombatType::AgonyDamage) {
 		return false;
 	}
 
@@ -6328,7 +6335,7 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 	if (std::shared_ptr<Player> targetPlayer = target->getPlayer()) {
 		auto chance = targetPlayer->getDodgeChance();
 		if (chance > 0 && uniform_random(0, 10000) < chance) {
-			InternalGame::sendBlockEffect(BLOCK_DODGE, damage.primary.type, target->getPosition(), attacker);
+			InternalGame::sendBlockEffect(BlockType::Dodge, damage.primary.type, target->getPosition(), attacker);
 			targetPlayer->sendTextMessage(MESSAGE_ATTENTION, "You dodged an attack.");
 			return true;
 		}
@@ -6336,7 +6343,7 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 
 	bool canHeal = false;
 	CombatDamage damageHeal;
-	damageHeal.primary.type = COMBAT_HEALING;
+	damageHeal.primary.type = CombatType::Healing;
 
 	bool damageAbsorbMessage = false;
 	bool damageIncreaseMessage = false;
@@ -6345,10 +6352,11 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 	CombatDamage damageReflected;
 	CombatParams damageReflectedParams;
 
-	BlockType_t primaryBlockType, secondaryBlockType;
+	BlockType primaryBlockType, secondaryBlockType;
 	std::shared_ptr<Player> targetPlayer = target->getPlayer();
 
-	if (damage.primary.type != COMBAT_NONE) {
+	if (damage.primary.type != CombatType::None) {
+
 		damage.primary.value = -damage.primary.value;
 		// Damage healing primary
 		if (attacker) {
@@ -6365,9 +6373,9 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 			if (attacker->getPlayer() && attacker->getIncreasePercent(damage.primary.type) != 0) {
 				damageIncreaseMessage = true;
 			}
-			damage.primary.value *= attacker->getBuff(BUFF_DAMAGEDEALT) / 100.;
+			damage.primary.value *= attacker->getBuff(Buffs_t::DamageDealt) / 100.;
 		}
-		damage.primary.value *= target->getBuff(BUFF_DAMAGERECEIVED) / 100.;
+		damage.primary.value *= target->getBuff(Buffs_t::DamageReceived) / 100.;
 
 		primaryBlockType = target->blockHit(attacker, damage.primary.type, damage.primary.value, checkDefense, checkArmor, field);
 
@@ -6375,7 +6383,7 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 		InternalGame::sendBlockEffect(primaryBlockType, damage.primary.type, target->getPosition(), attacker);
 		// Damage reflection primary
 		if (!damage.extension && attacker) {
-			if (targetPlayer && attacker->getMonster() && damage.primary.type != COMBAT_HEALING) {
+			if (targetPlayer && attacker->getMonster() && damage.primary.type != CombatType::Healing) {
 				// Charm rune (target as player)
 				const auto mType = g_monsters().getMonsterType(attacker->getName());
 				if (mType) {
@@ -6393,13 +6401,13 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 			if (primaryReflectPercent > 0 || primaryReflectFlat > 0) {
 				int32_t distanceX = Position::getDistanceX(target->getPosition(), attacker->getPosition());
 				int32_t distanceY = Position::getDistanceY(target->getPosition(), attacker->getPosition());
-				if (target->getMonster() || damage.primary.type != COMBAT_PHYSICALDAMAGE || primaryReflectPercent > 0 || std::max(distanceX, distanceY) < 2) {
+				if (target->getMonster() || damage.primary.type != CombatType::PhysicalDamage || primaryReflectPercent > 0 || std::max(distanceX, distanceY) < 2) {
 					int32_t reflectFlat = -static_cast<int32_t>(primaryReflectFlat);
 					int32_t reflectPercent = std::ceil(damage.primary.value * primaryReflectPercent / 100.);
 					int32_t reflectLimit = std::ceil(attacker->getMaxHealth() * 0.01);
 					damageReflected.primary.value = std::max(-reflectLimit, reflectFlat + reflectPercent);
 					if (targetPlayer) {
-						damageReflected.primary.type = COMBAT_NEUTRALDAMAGE;
+						damageReflected.primary.type = CombatType::NeutralDamage;
 					} else {
 						damageReflected.primary.type = damage.primary.type;
 					}
@@ -6415,10 +6423,10 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 			}
 		}
 	} else {
-		primaryBlockType = BLOCK_NONE;
+		primaryBlockType = BlockType::None;
 	}
 
-	if (damage.secondary.type != COMBAT_NONE) {
+	if (damage.secondary.type != CombatType::None) {
 		damage.secondary.value = -damage.secondary.value;
 		// Damage healing secondary
 		if (attacker && target->getMonster()) {
@@ -6433,9 +6441,9 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 			if (attacker->getPlayer() && attacker->getIncreasePercent(damage.secondary.type) != 0) {
 				damageIncreaseMessage = true;
 			}
-			damage.secondary.value *= attacker->getBuff(BUFF_DAMAGEDEALT) / 100.;
+			damage.secondary.value *= attacker->getBuff(Buffs_t::DamageDealt) / 100.;
 		}
-		damage.secondary.value *= target->getBuff(BUFF_DAMAGERECEIVED) / 100.;
+		damage.secondary.value *= target->getBuff(Buffs_t::DamageReceived) / 100.;
 
 		secondaryBlockType = target->blockHit(attacker, damage.secondary.type, damage.secondary.value, false, false, field);
 
@@ -6467,12 +6475,12 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 			}
 		}
 	} else {
-		secondaryBlockType = BLOCK_NONE;
+		secondaryBlockType = BlockType::None;
 	}
 	// Damage reflection secondary
 
-	if (damage.primary.type == COMBAT_HEALING) {
-		damage.primary.value *= target->getBuff(BUFF_HEALINGRECEIVED) / 100.;
+	if (damage.primary.type == CombatType::Healing) {
+		damage.primary.value *= target->getBuff(Buffs_t::HealingReceived) / 100.;
 	}
 
 	if (damageAbsorbMessage) {
@@ -6495,20 +6503,20 @@ bool Game::combatBlockHit(CombatDamage &damage, std::shared_ptr<Creature> attack
 	if (canHeal) {
 		combatChangeHealth(nullptr, target, damageHeal);
 	}
-	return (primaryBlockType != BLOCK_NONE) && (secondaryBlockType != BLOCK_NONE);
+	return (primaryBlockType != BlockType::None) && (secondaryBlockType != BlockType::None);
 }
 
-void Game::combatGetTypeInfo(CombatType_t combatType, std::shared_ptr<Creature> target, TextColor_t &color, uint16_t &effect) {
+void Game::combatGetTypeInfo(CombatType combatType, std::shared_ptr<Creature> target, TextColor_t &color, uint16_t &effect) {
 	switch (combatType) {
-		case COMBAT_PHYSICALDAMAGE: {
+		case CombatType::PhysicalDamage: {
 			std::shared_ptr<Item> splash = nullptr;
 			switch (target->getRace()) {
-				case RACE_VENOM:
+				case RaceType::Venom:
 					color = TEXTCOLOR_LIGHTGREEN;
 					effect = CONST_ME_HITBYPOISON;
 					splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_SLIME);
 					break;
-				case RACE_BLOOD:
+				case RaceType::Blood:
 					color = TEXTCOLOR_RED;
 					effect = CONST_ME_DRAWBLOOD;
 					if (std::shared_ptr<Tile> tile = target->getTile()) {
@@ -6517,20 +6525,20 @@ void Game::combatGetTypeInfo(CombatType_t combatType, std::shared_ptr<Creature> 
 						}
 					}
 					break;
-				case RACE_INK:
+				case RaceType::Ink:
 					color = TEXTCOLOR_LIGHTGREY;
 					effect = CONST_ME_HITAREA;
 					splash = Item::CreateItem(ITEM_SMALLSPLASH, FLUID_INK);
 					break;
-				case RACE_UNDEAD:
+				case RaceType::Unded:
 					color = TEXTCOLOR_LIGHTGREY;
 					effect = CONST_ME_HITAREA;
 					break;
-				case RACE_FIRE:
+				case RaceType::Fire:
 					color = TEXTCOLOR_ORANGE;
 					effect = CONST_ME_DRAWBLOOD;
 					break;
-				case RACE_ENERGY:
+				case RaceType::Energy:
 					color = TEXTCOLOR_PURPLE;
 					effect = CONST_ME_ENERGYHIT;
 					break;
@@ -6548,54 +6556,54 @@ void Game::combatGetTypeInfo(CombatType_t combatType, std::shared_ptr<Creature> 
 			break;
 		}
 
-		case COMBAT_ENERGYDAMAGE: {
+		case CombatType::EnergyDamage: {
 			color = TEXTCOLOR_PURPLE;
 			effect = CONST_ME_ENERGYHIT;
 			break;
 		}
 
-		case COMBAT_EARTHDAMAGE: {
+		case CombatType::EarthDamage: {
 			color = TEXTCOLOR_LIGHTGREEN;
 			effect = CONST_ME_GREEN_RINGS;
 			break;
 		}
 
-		case COMBAT_DROWNDAMAGE: {
+		case CombatType::DrownDamage: {
 			color = TEXTCOLOR_LIGHTBLUE;
 			effect = CONST_ME_LOSEENERGY;
 			break;
 		}
-		case COMBAT_FIREDAMAGE: {
+		case CombatType::FireDamage: {
 			color = TEXTCOLOR_ORANGE;
 			effect = CONST_ME_HITBYFIRE;
 			break;
 		}
-		case COMBAT_ICEDAMAGE: {
+		case CombatType::IceDamage: {
 			color = TEXTCOLOR_SKYBLUE;
 			effect = CONST_ME_ICEATTACK;
 			break;
 		}
-		case COMBAT_HOLYDAMAGE: {
+		case CombatType::HolyDamage: {
 			color = TEXTCOLOR_YELLOW;
 			effect = CONST_ME_HOLYDAMAGE;
 			break;
 		}
-		case COMBAT_DEATHDAMAGE: {
+		case CombatType::DeathDamage: {
 			color = TEXTCOLOR_DARKRED;
 			effect = CONST_ME_SMALLCLOUDS;
 			break;
 		}
-		case COMBAT_LIFEDRAIN: {
+		case CombatType::LifeDrain: {
 			color = TEXTCOLOR_RED;
 			effect = CONST_ME_MAGIC_RED;
 			break;
 		}
-		case COMBAT_AGONYDAMAGE: {
+		case CombatType::AgonyDamage: {
 			color = TEXTCOLOR_DARKBROWN;
 			effect = CONST_ME_AGONY;
 			break;
 		}
-		case COMBAT_NEUTRALDAMAGE: {
+		case CombatType::NeutralDamage: {
 			color = TEXTCOLOR_NEUTRALDAMAGE;
 			effect = CONST_ME_REDSMOKE;
 			break;
@@ -6693,7 +6701,7 @@ void Game::applyWheelOfDestinyHealing(CombatDamage &damage, std::shared_ptr<Play
 		if (damage.healingLink > 0) {
 			CombatDamage tmpDamage;
 			tmpDamage.primary.value = (damage.primary.value * damage.healingLink) / 100;
-			tmpDamage.primary.type = COMBAT_HEALING;
+			tmpDamage.primary.type = CombatType::Healing;
 			combatChangeHealth(attackerPlayer, attackerPlayer, tmpDamage);
 		}
 
@@ -6784,12 +6792,12 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 		}
 
 		auto targetPlayer = target->getPlayer();
-		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == SKULL_BLACK && attackerPlayer->getSkullClient(targetPlayer) == SKULL_NONE) {
+		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == Skull_t::Black && attackerPlayer->getSkullClient(targetPlayer) == Skull_t::None) {
 			return false;
 		}
 
 		if (damage.origin != ORIGIN_NONE) {
-			const auto events = target->getCreatureEvents(CREATURE_EVENT_HEALTHCHANGE);
+			const auto events = target->getCreatureEvents(CreatureEventType::HealthChange);
 			if (!events.empty()) {
 				for (const auto creatureEvent : events) {
 					creatureEvent->executeHealthChange(target, attacker, damage);
@@ -6808,7 +6816,7 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 
 		if (realHealthChange > 0 && !target->isInGhostMode()) {
 			if (targetPlayer) {
-				targetPlayer->updateImpactTracker(COMBAT_HEALING, realHealthChange);
+				targetPlayer->updateImpactTracker(CombatType::Healing, realHealthChange);
 			}
 
 			// Party hunt analyzer
@@ -6884,7 +6892,7 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 		const auto &attackerPlayer = attacker ? attacker->getPlayer() : nullptr;
 
 		const auto &targetPlayer = target->getPlayer();
-		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == SKULL_BLACK && attackerPlayer->getSkullClient(targetPlayer) == SKULL_NONE) {
+		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == Skull_t::Black && attackerPlayer->getSkullClient(targetPlayer) == Skull_t::None) {
 			return false;
 		}
 
@@ -6947,13 +6955,13 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 			g_events().eventCreatureOnDrainHealth(target, attacker, damage.primary.type, damage.primary.value, damage.secondary.type, damage.secondary.value, message.primary.color, message.secondary.color);
 			g_callbacks().executeCallback(EventCallback_t::creatureOnDrainHealth, &EventCallback::creatureOnDrainHealth, target, attacker, damage.primary.type, damage.primary.value, damage.secondary.type, damage.secondary.value, message.primary.color, message.secondary.color);
 		}
-		if (damage.origin != ORIGIN_NONE && attacker && damage.primary.type != COMBAT_HEALING) {
-			damage.primary.value *= attacker->getBuff(BUFF_DAMAGEDEALT) / 100.;
-			damage.secondary.value *= attacker->getBuff(BUFF_DAMAGEDEALT) / 100.;
+		if (damage.origin != ORIGIN_NONE && attacker && damage.primary.type != CombatType::Healing) {
+			damage.primary.value *= attacker->getBuff(Buffs_t::DamageDealt) / 100.;
+			damage.secondary.value *= attacker->getBuff(Buffs_t::DamageDealt) / 100.;
 		}
-		if (damage.origin != ORIGIN_NONE && target && damage.primary.type != COMBAT_HEALING) {
-			damage.primary.value *= target->getBuff(BUFF_DAMAGERECEIVED) / 100.;
-			damage.secondary.value *= target->getBuff(BUFF_DAMAGERECEIVED) / 100.;
+		if (damage.origin != ORIGIN_NONE && target && damage.primary.type != CombatType::Healing) {
+			damage.primary.value *= target->getBuff(Buffs_t::DamageReceived) / 100.;
+			damage.secondary.value *= target->getBuff(Buffs_t::DamageReceived) / 100.;
 		}
 		auto healthChange = damage.primary.value + damage.secondary.value;
 		if (healthChange == 0) {
@@ -6993,7 +7001,7 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 		std::string attackMsg = fmt::format("{} attack", damage.critical ? "critical " : " ");
 		std::stringstream ss;
 
-		if (target->hasCondition(CONDITION_MANASHIELD) && damage.primary.type != COMBAT_UNDEFINEDDAMAGE) {
+		if (target->hasCondition(ConditionType::ManaShield) && damage.primary.type != CombatType::UndefinedDamage) {
 			int32_t manaDamage = std::min<int32_t>(target->getMana(), healthChange);
 			uint16_t manaShield = target->getManaShield();
 			if (manaShield > 0) {
@@ -7002,13 +7010,13 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 					manaShield = manaShield - manaDamage;
 				} else {
 					manaDamage = manaShield;
-					target->removeCondition(CONDITION_MANASHIELD);
+					target->removeCondition(ConditionType::ManaShield);
 					manaShield = 0;
 				}
 			}
 			if (manaDamage != 0) {
 				if (damage.origin != ORIGIN_NONE) {
-					const auto events = target->getCreatureEvents(CREATURE_EVENT_MANACHANGE);
+					const auto events = target->getCreatureEvents(CreatureEventType::ManaChange);
 					if (!events.empty()) {
 						for (const auto creatureEvent : events) {
 							creatureEvent->executeManaChange(target, attacker, damage);
@@ -7024,7 +7032,7 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 				target->drainMana(attacker, manaDamage);
 
 				if (target->getMana() == 0 && manaShield > 0) {
-					target->removeCondition(CONDITION_MANASHIELD);
+					target->removeCondition(ConditionType::ManaShield);
 				}
 
 				addMagicEffect(spectators.data(), targetPos, CONST_ME_LOSEENERGY);
@@ -7092,14 +7100,14 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 
 				if (attackerPlayer) {
 					attackerPlayer->updateImpactTracker(damage.primary.type, damage.primary.value);
-					if (damage.secondary.type != COMBAT_NONE) {
+					if (damage.secondary.type != CombatType::None) {
 						attackerPlayer->updateImpactTracker(damage.secondary.type, damage.secondary.value);
 					}
 				}
 
 				if (targetPlayer) {
 					targetPlayer->updateImpactTracker(damage.primary.type, manaDamage);
-					if (damage.secondary.type != COMBAT_NONE) {
+					if (damage.secondary.type != CombatType::None) {
 						targetPlayer->updateImpactTracker(damage.secondary.type, damage.secondary.value);
 					}
 				}
@@ -7112,7 +7120,7 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 		}
 
 		if (damage.origin != ORIGIN_NONE) {
-			const auto events = target->getCreatureEvents(CREATURE_EVENT_HEALTHCHANGE);
+			const auto events = target->getCreatureEvents(CreatureEventType::HealthChange);
 			if (!events.empty()) {
 				for (const auto creatureEvent : events) {
 					creatureEvent->executeHealthChange(target, attacker, damage);
@@ -7139,7 +7147,7 @@ bool Game::combatChangeHealth(std::shared_ptr<Creature> attacker, std::shared_pt
 		if (realDamage == 0) {
 			return true;
 		} else if (realDamage >= targetHealth) {
-			for (const auto creatureEvent : target->getCreatureEvents(CREATURE_EVENT_PREPAREDEATH)) {
+			for (const auto creatureEvent : target->getCreatureEvents(CreatureEventType::PrepareDeath)) {
 				if (!creatureEvent->executeOnPrepareDeath(target, attacker)) {
 					return false;
 				}
@@ -7230,7 +7238,7 @@ void Game::sendMessages(
 ) const {
 	if (attackerPlayer) {
 		attackerPlayer->updateImpactTracker(damage.primary.type, damage.primary.value);
-		if (damage.secondary.type != COMBAT_NONE) {
+		if (damage.secondary.type != CombatType::None) {
 			attackerPlayer->updateImpactTracker(damage.secondary.type, damage.secondary.value);
 		}
 	}
@@ -7242,7 +7250,7 @@ void Game::sendMessages(
 
 		targetPlayer->updateInputAnalyzer(damage.primary.type, damage.primary.value, cause);
 		if (attackerPlayer) {
-			if (damage.secondary.type != COMBAT_NONE) {
+			if (damage.secondary.type != CombatType::None) {
 				attackerPlayer->updateInputAnalyzer(damage.secondary.type, damage.secondary.value, cause);
 			}
 		}
@@ -7396,7 +7404,7 @@ void Game::applyManaLeech(
 	// Void charm rune
 	if (targetMonster) {
 		if (uint16_t playerCharmRaceidVoid = attackerPlayer->parseRacebyCharm(CHARM_VOID, false, 0);
-			playerCharmRaceidVoid != 0 && playerCharmRaceidVoid == targetMonster->getRace()) {
+			playerCharmRaceidVoid != 0 && playerCharmRaceidVoid == raceToValue(targetMonster->getRace())) {
 			if (const auto charm = g_iobestiary().getBestiaryCharm(CHARM_VOID)) {
 				manaSkill += charm->percent;
 			}
@@ -7407,7 +7415,7 @@ void Game::applyManaLeech(
 
 	int affected = damage.affected;
 	tmpDamage.origin = ORIGIN_SPELL;
-	tmpDamage.primary.type = COMBAT_MANADRAIN;
+	tmpDamage.primary.type = CombatType::ManaDrain;
 	tmpDamage.primary.value = calculateLeechAmount(realDamage, manaSkill, affected);
 
 	Combat::doCombatMana(nullptr, attackerPlayer, tmpDamage, tmpParams);
@@ -7438,7 +7446,7 @@ void Game::applyLifeLeech(
 
 	int affected = damage.affected;
 	tmpDamage.origin = ORIGIN_SPELL;
-	tmpDamage.primary.type = COMBAT_HEALING;
+	tmpDamage.primary.type = CombatType::Healing;
 	tmpDamage.primary.value = calculateLeechAmount(realDamage, lifeSkill, affected);
 
 	Combat::doCombatHealth(nullptr, attackerPlayer, tmpDamage, tmpParams);
@@ -7461,12 +7469,12 @@ bool Game::combatChangeMana(std::shared_ptr<Creature> attacker, std::shared_ptr<
 		}
 
 		auto targetPlayer = target->getPlayer();
-		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == SKULL_BLACK && attackerPlayer->getSkullClient(targetPlayer) == SKULL_NONE) {
+		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == Skull_t::Black && attackerPlayer->getSkullClient(targetPlayer) == Skull_t::None) {
 			return false;
 		}
 
 		if (damage.origin != ORIGIN_NONE) {
-			const auto events = target->getCreatureEvents(CREATURE_EVENT_MANACHANGE);
+			const auto events = target->getCreatureEvents(CreatureEventType::ManaChange);
 			if (!events.empty()) {
 				for (const auto creatureEvent : events) {
 					creatureEvent->executeManaChange(target, attacker, damage);
@@ -7544,13 +7552,13 @@ bool Game::combatChangeMana(std::shared_ptr<Creature> attacker, std::shared_ptr<
 		}
 
 		auto targetPlayer = target->getPlayer();
-		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == SKULL_BLACK && attackerPlayer->getSkullClient(targetPlayer) == SKULL_NONE) {
+		if (attackerPlayer && targetPlayer && attackerPlayer->getSkull() == Skull_t::Black && attackerPlayer->getSkullClient(targetPlayer) == Skull_t::None) {
 			return false;
 		}
 
 		auto manaLoss = std::min<int32_t>(target->getMana(), -manaChange);
-		BlockType_t blockType = target->blockHit(attacker, COMBAT_MANADRAIN, manaLoss);
-		if (blockType != BLOCK_NONE) {
+		auto blockType = target->blockHit(attacker, CombatType::ManaDrain, manaLoss);
+		if (blockType != BlockType::None) {
 			addMagicEffect(targetPos, CONST_ME_POFF);
 			return false;
 		}
@@ -7560,7 +7568,7 @@ bool Game::combatChangeMana(std::shared_ptr<Creature> attacker, std::shared_ptr<
 		}
 
 		if (damage.origin != ORIGIN_NONE) {
-			const auto events = target->getCreatureEvents(CREATURE_EVENT_MANACHANGE);
+			const auto events = target->getCreatureEvents(CreatureEventType::ManaChange);
 			if (!events.empty()) {
 				for (const auto creatureEvent : events) {
 					creatureEvent->executeManaChange(target, attacker, damage);
@@ -7898,25 +7906,25 @@ void Game::updateCreatureType(std::shared_ptr<Creature> creature) {
 	}
 
 	std::shared_ptr<Player> masterPlayer = nullptr;
-	CreatureType_t creatureType = creature->getType();
-	if (creatureType == CREATURETYPE_MONSTER) {
+	auto creatureType = creature->getType();
+	if (creatureType == CreatureType::Monster) {
 		std::shared_ptr<Creature> master = creature->getMaster();
 		if (master) {
 			masterPlayer = master->getPlayer();
 			if (masterPlayer) {
-				creatureType = CREATURETYPE_SUMMON_OTHERS;
+				creatureType = CreatureType::SummonOthers;
 			}
 		}
 	}
 	if (creature->isHealthHidden()) {
-		creatureType = CREATURETYPE_HIDDEN;
+		creatureType = CreatureType::Hidden;
 	}
 
 	// Send to clients
 	auto spectators = Spectators().find<Player>(creature->getPosition(), true);
-	if (creatureType == CREATURETYPE_SUMMON_OTHERS) {
+	if (creatureType == CreatureType::SummonOthers) {
 		for (const auto &spectator : spectators) {
-			spectator->getPlayer()->sendCreatureType(creature, masterPlayer == spectator ? CREATURETYPE_SUMMON_PLAYER : creatureType);
+			spectator->getPlayer()->sendCreatureType(creature, masterPlayer == spectator ? CreatureType::SummonPlayer : creatureType);
 		}
 	} else {
 		for (const auto &spectator : spectators) {
@@ -8103,7 +8111,7 @@ void Game::playerLeaveParty(uint32_t playerId) {
 	}
 
 	std::shared_ptr<Party> party = player->getParty();
-	if (!party || player->hasCondition(CONDITION_INFIGHT) && !player->getZoneType() == ZONE_PROTECTION) {
+	if (!party || player->hasCondition(ConditionType::InFight) && player->getZoneType() != ZoneType::Protection) {
 		player->sendTextMessage(TextMessage(MESSAGE_FAILURE, "You cannot leave party, contact the administrator."));
 		return;
 	}
@@ -8119,7 +8127,7 @@ void Game::playerEnableSharedPartyExperience(uint32_t playerId, bool sharedExpAc
 
 	auto party = player->getParty();
 	auto playerTile = player->getTile();
-	if (!party || (player->hasCondition(CONDITION_INFIGHT) && playerTile && !playerTile->hasFlag(TILESTATE_PROTECTIONZONE))) {
+	if (!party || (player->hasCondition(ConditionType::InFight) && playerTile && !playerTile->hasFlag(TILESTATE_PROTECTIONZONE))) {
 		return;
 	}
 
@@ -8134,7 +8142,7 @@ void Game::sendGuildMotd(uint32_t playerId) {
 
 	const auto guild = player->getGuild();
 	if (guild) {
-		player->sendChannelMessage("Message of the Day", guild->getMotd(), TALKTYPE_CHANNEL_R1, CHANNEL_GUILD);
+		player->sendChannelMessage("Message of the Day", guild->getMotd(), TalkType::ChannelR1, CHANNEL_GUILD);
 	}
 }
 
@@ -8580,20 +8588,20 @@ void Game::playerNpcGreet(uint32_t playerId, uint32_t npcId) {
 		return;
 	}
 
-	if (!player->canSpeakWithHireling(npc->getSpeechBubble())) {
+	if (!player->canSpeakWithHireling(static_cast<uint8_t>(npc->getSpeechBubble()))) {
 		return;
 	}
 
 	auto spectators = Spectators().find<Player>(player->getPosition(), true);
 	spectators.insert(npc);
-	internalCreatureSay(player, TALKTYPE_SAY, "hi", false, &spectators);
+	internalCreatureSay(player, TalkType::Say, "hi", false, &spectators);
 
 	auto npcsSpectators = spectators.filter<Npc>();
 
-	if (npc->getSpeechBubble() == SPEECHBUBBLE_TRADE) {
-		internalCreatureSay(player, TALKTYPE_PRIVATE_PN, "trade", false, &npcsSpectators);
+	if (npc->getSpeechBubble() == SpeechBubble_t::Trade) {
+		internalCreatureSay(player, TalkType::PrivatePlayerToNpc, "trade", false, &npcsSpectators);
 	} else {
-		internalCreatureSay(player, TALKTYPE_PRIVATE_PN, "sail", false, &npcsSpectators);
+		internalCreatureSay(player, TalkType::PrivatePlayerToNpc, "sail", false, &npcsSpectators);
 	}
 
 	player->updateUIExhausted();
@@ -9244,12 +9252,12 @@ void Game::parsePlayerExtendedOpcode(uint32_t playerId, uint8_t opcode, const st
 		return;
 	}
 
-	for (const auto creatureEvent : player->getCreatureEvents(CREATURE_EVENT_EXTENDED_OPCODE)) {
+	for (const auto creatureEvent : player->getCreatureEvents(CreatureEventType::ExtendedOpcode)) {
 		creatureEvent->executeExtendedOpcode(player, opcode, buffer);
 	}
 }
 
-void Game::forceRemoveCondition(uint32_t creatureId, ConditionType_t conditionType, ConditionId_t conditionId) {
+void Game::forceRemoveCondition(uint32_t creatureId, ConditionType conditionType, ConditionId_t conditionId) {
 	std::shared_ptr<Creature> creature = getCreatureByID(creatureId);
 	if (!creature) {
 		return;
@@ -9296,7 +9304,7 @@ void Game::playerAnswerModalWindow(uint32_t playerId, uint32_t modalWindowId, ui
 
 		player->setBedItem(nullptr);
 	} else {
-		for (const auto creatureEvent : player->getCreatureEvents(CREATURE_EVENT_MODALWINDOW)) {
+		for (const auto creatureEvent : player->getCreatureEvents(CreatureEventType::ModalWindow)) {
 			creatureEvent->executeModalWindow(player, modalWindowId, button, choice);
 		}
 	}

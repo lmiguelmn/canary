@@ -1,4 +1,6 @@
-# Define and setup CanaryLib main library target
+SET(SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
+
+# === Define and setup CanaryLib main library target ===
 add_library(${PROJECT_NAME}_lib)
 setup_target(${PROJECT_NAME}_lib)
 
@@ -19,8 +21,39 @@ add_subdirectory(security)
 add_subdirectory(server)
 add_subdirectory(utils)
 
+# === ModulesLib ===
+add_library(ModulesLib STATIC)
+
+# Set C++ standard to use C++20
+target_compile_features(ModulesLib PUBLIC cxx_std_20)
+
+# Enable module scanning specifically for this library
+target_compile_options(ModulesLib PRIVATE
+    $<$<CXX_COMPILER_ID:GNU>:-fmodules-ts>
+    $<$<CXX_COMPILER_ID:Clang>:-fmodules>
+    $<$<CXX_COMPILER_ID:MSVC>:/experimental:module>
+)
+
+set_property(TARGET ModulesLib PROPERTY CMAKE_CXX_SCAN_FOR_MODULES TRUE)
+
+# Add module files to ModulesLib
+target_sources(ModulesLib PUBLIC
+    FILE_SET cxx_modules TYPE CXX_MODULES FILES
+    enums/enum_modules.ixx
+    game/info/light_info.ixx
+    creatures/appearance/outfit/outfit_type.ixx
+    game/movement/position.ixx
+)
+
+# Configure include directories
+target_include_directories(ModulesLib PUBLIC ${CMAKE_SOURCE_DIR}/..)
+
 # Add more global sources - please add preferably in the sub_directory CMakeLists.
-target_sources(${PROJECT_NAME}_lib PRIVATE canary_server.cpp)
+target_sources(${PROJECT_NAME}_lib PRIVATE
+    canary_server.cpp
+)
+
+set_property(TARGET ${PROJECT_NAME}_lib PROPERTY CMAKE_CXX_SCAN_FOR_MODULES TRUE)
 
 # Add public pre compiler header to lib, to pass down to related targets
 if (NOT SPEED_UP_BUILD_UNITY)
@@ -29,13 +62,6 @@ endif()
 
 if(NOT SPEED_UP_BUILD_UNITY AND USE_PRECOMPILED_HEADERS)
     target_compile_definitions(${PROJECT_NAME}_lib PUBLIC -DUSE_PRECOMPILED_HEADERS)
-endif()
-
-# *****************************************************************************
-# Build flags - need to be set before the links and sources
-# *****************************************************************************
-if (CMAKE_COMPILER_IS_GNUCXX)
-    target_compile_options(${PROJECT_NAME}_lib PRIVATE -Wno-deprecated-declarations)
 endif()
 
 # Sets the NDEBUG macro for RelWithDebInfo and Release configurations.
@@ -78,7 +104,7 @@ endif()
 target_include_directories(${PROJECT_NAME}_lib
         PUBLIC
         ${BOOST_DI_INCLUDE_DIRS}
-        ${CMAKE_SOURCE_DIR}/src
+        ${SOURCE_DIR}
         ${GMP_INCLUDE_DIRS}
         ${LUAJIT_INCLUDE_DIRS}
         ${PARALLEL_HASHMAP_INCLUDE_DIRS}
@@ -106,6 +132,7 @@ target_link_libraries(${PROJECT_NAME}_lib
         unofficial::libmariadb
         unofficial::mariadbclient
         protobuf
+        ModulesLib
 )
 
 if(FEATURE_METRICS)
@@ -143,12 +170,4 @@ else()
 endif (MSVC)
 
 # === OpenMP ===
-if(OPTIONS_ENABLE_OPENMP)
-    log_option_enabled("openmp")
-    find_package(OpenMP)
-    if(OpenMP_CXX_FOUND)
-        target_link_libraries(${PROJECT_NAME}_lib PUBLIC OpenMP::OpenMP_CXX)
-    endif()
-else()
-    log_option_disabled("openmp")
-endif()
+setup_open_mp(${PROJECT_NAME}_lib)

@@ -22,6 +22,11 @@ class Player;
 class MatrixArea;
 class Weapon;
 
+struct CombatDamage;
+
+import enum_modules;
+import game_movement;
+
 // for luascript callback
 class ValueCallback final : public CallBack {
 public:
@@ -94,8 +99,8 @@ struct CombatParams {
 
 	uint16_t itemId = 0;
 
-	ConditionType_t dispelType = CONDITION_NONE;
-	CombatType_t combatType = COMBAT_NONE;
+	ConditionType dispelType = ConditionType::None;
+	CombatType combatType = CombatType::None;
 	CombatOrigin origin = ORIGIN_SPELL;
 
 	uint16_t impactEffect = CONST_ME_NONE;
@@ -240,31 +245,31 @@ private:
 
 		Direction dir;
 		if (dx < 0) {
-			dir = DIRECTION_WEST;
+			dir = Direction::West;
 		} else if (dx > 0) {
-			dir = DIRECTION_EAST;
+			dir = Direction::East;
 		} else if (dy < 0) {
-			dir = DIRECTION_NORTH;
+			dir = Direction::North;
 		} else {
-			dir = DIRECTION_SOUTH;
+			dir = Direction::South;
 		}
 
 		if (hasExtArea) {
 			if (dx < 0 && dy < 0) {
-				dir = DIRECTION_NORTHWEST;
+				dir = Direction::NorthWest;
 			} else if (dx > 0 && dy < 0) {
-				dir = DIRECTION_NORTHEAST;
+				dir = Direction::NorthEast;
 			} else if (dx < 0 && dy > 0) {
-				dir = DIRECTION_SOUTHWEST;
+				dir = Direction::SouthWest;
 			} else if (dx > 0 && dy > 0) {
-				dir = DIRECTION_SOUTHEAST;
+				dir = Direction::SouthEast;
 			}
 		}
 
-		return areas[dir];
+		return areas[directionToValue(dir)];
 	}
 
-	std::array<std::unique_ptr<MatrixArea>, Direction::DIRECTION_LAST + 1> areas {};
+	std::array<std::unique_ptr<MatrixArea>, directionToValue(Direction::Last) + 1> areas {};
 	bool hasExtArea = false;
 };
 
@@ -295,8 +300,8 @@ public:
 	static bool isInPvpZone(std::shared_ptr<Creature> attacker, std::shared_ptr<Creature> target);
 	static bool isProtected(std::shared_ptr<Player> attacker, std::shared_ptr<Player> target);
 	static bool isPlayerCombat(std::shared_ptr<Creature> target);
-	static CombatType_t ConditionToDamageType(ConditionType_t type);
-	static ConditionType_t DamageToConditionType(CombatType_t type);
+	static CombatType ConditionToDamageType(ConditionType type);
+	static ConditionType DamageToConditionType(CombatType type);
 	static ReturnValue canTargetCreature(std::shared_ptr<Player> attacker, std::shared_ptr<Creature> target);
 	static ReturnValue canDoCombat(std::shared_ptr<Creature> caster, std::shared_ptr<Tile> tile, bool aggressive);
 	static ReturnValue canDoCombat(std::shared_ptr<Creature> attacker, std::shared_ptr<Creature> target, bool aggressive);
@@ -424,7 +429,7 @@ public:
 	bool isReplaceable() const {
 		return Item::items[getID()].replaceable;
 	}
-	CombatType_t getCombatType() const {
+	CombatType getCombatType() const {
 		const ItemType &it = items[getID()];
 		return it.combatType;
 	}

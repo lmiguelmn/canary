@@ -18,6 +18,8 @@
 
 #include <appearances.pb.h>
 
+import game_movement;
+
 Items::Items() = default;
 
 void Items::clear() {
