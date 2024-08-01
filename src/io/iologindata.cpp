@@ -10,6 +10,8 @@
 #include "pch.hpp"
 
 #include "io/iologindata.hpp"
+
+#include "database/database.hpp"
 #include "io/functions/iologindata_load_player.hpp"
 #include "io/functions/iologindata_save_player.hpp"
 #include "game/game.hpp"
@@ -67,7 +69,7 @@ uint8_t IOLoginData::getAccountType(uint32_t accountId) {
 		return ACCOUNT_TYPE_NORMAL;
 	}
 
-	return result->getNumber<uint8_t>("type");
+	return result->getU8("type");
 }
 
 void IOLoginData::updateOnlineStatus(uint32_t guid, bool login) {
@@ -297,7 +299,7 @@ uint32_t IOLoginData::getGuidByName(const std::string &name) {
 	if (!result) {
 		return 0;
 	}
-	return result->getNumber<uint32_t>("id");
+	return result->getU32("id");
 }
 
 bool IOLoginData::getGuidByNameEx(uint32_t &guid, bool &specialVip, std::string &name) {
@@ -311,8 +313,8 @@ bool IOLoginData::getGuidByNameEx(uint32_t &guid, bool &specialVip, std::string 
 	}
 
 	name = result->getString("name");
-	guid = result->getNumber<uint32_t>("id");
-	if (auto group = g_game().groups.getGroup(result->getNumber<uint16_t>("group_id"))) {
+	guid = result->getU32("id");
+	if (auto group = g_game().groups.getGroup(result->getU16("group_id"))) {
 		specialVip = group->flags[Groups::getFlagNumber(PlayerFlags_t::SpecialVIP)];
 	} else {
 		specialVip = false;
@@ -357,11 +359,11 @@ std::vector<VIPEntry> IOLoginData::getVIPEntries(uint32_t accountId) {
 		entries.reserve(result->countResults());
 		do {
 			entries.emplace_back(
-				result->getNumber<uint32_t>("player_id"),
+				result->getU32("player_id"),
 				result->getString("name"),
 				result->getString("description"),
-				result->getNumber<uint32_t>("icon"),
-				result->getNumber<uint16_t>("notify") != 0
+				result->getU32("icon"),
+				result->getU16("notify") != 0
 			);
 		} while (result->next());
 	}
@@ -398,9 +400,9 @@ std::vector<VIPGroupEntry> IOLoginData::getVIPGroupEntries(uint32_t accountId, u
 
 		do {
 			entries.emplace_back(
-				result->getNumber<uint8_t>("id"),
+				result->getU8("id"),
 				result->getString("name"),
-				result->getNumber<uint8_t>("customizable") == 0 ? false : true
+				result->getU8("customizable") == 0 ? false : true
 			);
 		} while (result->next());
 	}

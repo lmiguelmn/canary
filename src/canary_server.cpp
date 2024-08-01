@@ -11,6 +11,7 @@
 
 #include "canary_server.hpp"
 
+#include "database/database.hpp"
 #include "declarations.hpp"
 #include "creatures/players/grouping/familiars.hpp"
 #include "creatures/players/storages/storages.hpp"
@@ -99,7 +100,6 @@ int CanaryServer::run() {
 #endif
 
 				g_game().start(&serviceManager);
-				g_game().setGameState(GAME_STATE_NORMAL);
 				if (g_configManager().getBoolean(TOGGLE_MAINTAIN_MODE, __FUNCTION__)) {
 					g_game().setGameState(GAME_STATE_CLOSED);
 					g_logger().warn("Initialized in maintain mode!");
@@ -305,7 +305,6 @@ void CanaryServer::initializeDatabase() {
 	if (!Database::getInstance().connect()) {
 		throw FailedToInitializeCanary("Failed to connect to database!");
 	}
-	logger.debug("MySQL Version: {}", Database::getClientVersion());
 
 	logger.debug("Running database manager...");
 	if (!DatabaseManager::isDatabaseSetup()) {
