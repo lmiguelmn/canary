@@ -87,7 +87,7 @@
 template <typename E>
 struct fmt::formatter<E, std::enable_if_t<std::is_enum_v<E>, char>> : fmt::formatter<std::underlying_type_t<E>> {
 	template <typename FormatContext>
-	auto format(E e, FormatContext &ctx) const { // Adicione 'const' aqui
+	auto format(E e, FormatContext &ctx) const {
 		return fmt::formatter<std::underlying_type_t<E>>::format(
 			static_cast<std::underlying_type_t<E>>(e), ctx
 		);
