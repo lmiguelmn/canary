@@ -19,8 +19,8 @@ DepotChest::DepotChest(uint16_t type) :
 	pagination = true;
 }
 
-ReturnValue DepotChest::queryAdd(int32_t index, const std::shared_ptr<Thing> &thing, uint32_t count, uint32_t flags, std::shared_ptr<Creature> actor /* = nullptr*/) {
-	std::shared_ptr<Item> item = thing->getItem();
+ReturnValue DepotChest::queryAdd(int32_t index, const std::shared_ptr<Thing> &thing, uint32_t count, uint32_t flags, const std::shared_ptr<Creature> &actor /* = nullptr*/) {
+	const auto item = thing->getItem();
 	if (item == nullptr) {
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
@@ -56,14 +56,14 @@ ReturnValue DepotChest::queryAdd(int32_t index, const std::shared_ptr<Thing> &th
 	return Container::queryAdd(index, thing, count, flags, actor);
 }
 
-void DepotChest::postAddNotification(std::shared_ptr<Thing> thing, std::shared_ptr<Cylinder> oldParent, int32_t index, CylinderLink_t) {
+void DepotChest::postAddNotification(const std::shared_ptr<Thing> &thing, const std::shared_ptr<Cylinder> &oldParent, int32_t index, CylinderLink_t) {
 	std::shared_ptr<Cylinder> localParent = getParent();
 	if (localParent != nullptr) {
 		localParent->postAddNotification(thing, oldParent, index, LINK_PARENT);
 	}
 }
 
-void DepotChest::postRemoveNotification(std::shared_ptr<Thing> thing, std::shared_ptr<Cylinder> newParent, int32_t index, CylinderLink_t) {
+void DepotChest::postRemoveNotification(const std::shared_ptr<Thing> &thing, const std::shared_ptr<Cylinder> &newParent, int32_t index, CylinderLink_t) {
 	std::shared_ptr<Cylinder> localParent = getParent();
 	if (localParent != nullptr) {
 		localParent->postRemoveNotification(thing, newParent, index, LINK_PARENT);

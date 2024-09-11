@@ -7,6 +7,8 @@
  * Website: https://docs.opentibiabr.com/
  */
 
+#include <utility>
+
 #include "pch.hpp"
 
 #include "creatures/combat/combat.hpp"
@@ -19,7 +21,7 @@
 Weapons::Weapons() = default;
 Weapons::~Weapons() = default;
 
-const WeaponShared_ptr Weapons::getWeapon(std::shared_ptr<Item> item) const {
+WeaponShared_ptr Weapons::getWeapon(const std::shared_ptr<Item> &item) const {
 	if (!item) {
 		return nullptr;
 	}
@@ -54,7 +56,7 @@ void Weapons::clear(bool isFromXML /*= false*/) {
 	weapons.clear();
 }
 
-bool Weapons::registerLuaEvent(WeaponShared_ptr event, bool fromXML /*= false*/) {
+bool Weapons::registerLuaEvent(const WeaponShared_ptr &event, bool fromXML /*= false*/) {
 	weapons[event->getID()] = event;
 	if (fromXML) {
 		event->setFromXML(fromXML);
@@ -81,7 +83,7 @@ void Weapon::configureWeapon(const ItemType &it) {
 	id = it.id;
 }
 
-int32_t Weapon::playerWeaponCheck(std::shared_ptr<Player> player, std::shared_ptr<Creature> target, uint8_t shootRange) const {
+int32_t Weapon::playerWeaponCheck(const std::shared_ptr<Player> &player, const std::shared_ptr<Creature> &target, uint8_t shootRange) const {
 	const Position &playerPos = player->getPosition();
 	const Position &targetPos = target->getPosition();
 	if (playerPos.z != targetPos.z) {
@@ -131,7 +133,7 @@ int32_t Weapon::playerWeaponCheck(std::shared_ptr<Player> player, std::shared_pt
 	return 100;
 }
 
-bool Weapon::useWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> item, std::shared_ptr<Creature> target) const {
+bool Weapon::useWeapon(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, const std::shared_ptr<Creature> &target) const {
 	int32_t damageModifier = playerWeaponCheck(player, target, item->getShootRange());
 	if (damageModifier == 0) {
 		return false;
@@ -141,7 +143,7 @@ bool Weapon::useWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> ite
 	return true;
 }
 
-CombatDamage Weapon::getCombatDamage(CombatDamage combat, std::shared_ptr<Player> player, std::shared_ptr<Item> item, int32_t damageModifier) const {
+CombatDamage Weapon::getCombatDamage(CombatDamage combat, const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, int32_t damageModifier) const {
 	// Local variables
 	uint32_t level = player->getLevel();
 	int16_t elementalAttack = getElementDamageValue();
@@ -164,7 +166,7 @@ CombatDamage Weapon::getCombatDamage(CombatDamage combat, std::shared_ptr<Player
 	return combat;
 }
 
-bool Weapon::useFist(std::shared_ptr<Player> player, std::shared_ptr<Creature> target) {
+bool Weapon::useFist(const std::shared_ptr<Player> &player, const std::shared_ptr<Creature> &target) {
 	if (!Position::areInRange<1, 1>(player->getPosition(), target->getPosition())) {
 		return false;
 	}
@@ -194,7 +196,7 @@ bool Weapon::useFist(std::shared_ptr<Player> player, std::shared_ptr<Creature> t
 	return true;
 }
 
-void Weapon::internalUseWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> item, std::shared_ptr<Creature> target, int32_t damageModifier, int32_t cleavePercent) const {
+void Weapon::internalUseWeapon(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, const std::shared_ptr<Creature> &target, int32_t damageModifier, int32_t cleavePercent) const {
 	if (player) {
 		if (params.soundCastEffect == SoundEffect_t::SILENCE) {
 			g_game().sendDoubleSoundEffect(player->getPosition(), player->getHitSoundEffect(), player->getAttackSoundEffect(), player);
@@ -258,7 +260,7 @@ void Weapon::internalUseWeapon(std::shared_ptr<Player> player, std::shared_ptr<I
 	onUsedWeapon(player, item, target->getTile());
 }
 
-void Weapon::internalUseWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> item, std::shared_ptr<Tile> tile) const {
+void Weapon::internalUseWeapon(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, const std::shared_ptr<Tile> &tile) const {
 	if (isLoadedCallback()) {
 		LuaVariant var;
 		var.type = VARIANT_TARGETPOSITION;
@@ -269,10 +271,10 @@ void Weapon::internalUseWeapon(std::shared_ptr<Player> player, std::shared_ptr<I
 		g_game().addMagicEffect(tile->getPosition(), CONST_ME_POFF);
 		g_game().sendSingleSoundEffect(tile->getPosition(), SoundEffect_t::PHYSICAL_RANGE_MISS, player);
 	}
-	onUsedWeapon(player, item, tile);
+	onUsedWeapon(player, std::move(item), tile);
 }
 
-void Weapon::onUsedWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> item, std::shared_ptr<Tile> destTile) const {
+void Weapon::onUsedWeapon(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, const std::shared_ptr<Tile> &destTile) const {
 	if (!player->hasFlag(PlayerFlags_t::NotGainSkill)) {
 		skills_t skillType;
 		uint32_t skillPoint;
@@ -331,7 +333,7 @@ void Weapon::onUsedWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> 
 	}
 }
 
-uint32_t Weapon::getManaCost(std::shared_ptr<Player> player) const {
+uint32_t Weapon::getManaCost(const std::shared_ptr<Player> &player) const {
 	if (mana != 0) {
 		return mana;
 	}
@@ -343,7 +345,7 @@ uint32_t Weapon::getManaCost(std::shared_ptr<Player> player) const {
 	return (player->getMaxMana() * manaPercent) / 100;
 }
 
-int32_t Weapon::getHealthCost(std::shared_ptr<Player> player) const {
+int32_t Weapon::getHealthCost(const std::shared_ptr<Player> &player) const {
 	if (health != 0) {
 		return health;
 	}
@@ -355,9 +357,9 @@ int32_t Weapon::getHealthCost(std::shared_ptr<Player> player) const {
 	return (player->getMaxHealth() * healthPercent) / 100;
 }
 
-bool Weapon::executeUseWeapon(std::shared_ptr<Player> player, const LuaVariant &var) const {
+bool Weapon::executeUseWeapon(const std::shared_ptr<Player> &player, const LuaVariant &var) const {
 	// onUseWeapon(player, var)
-	if (!getScriptInterface()->reserveScriptEnv()) {
+	if (!LuaScriptInterface::reserveScriptEnv()) {
 		std::string playerName = player ? player->getName() : "Player nullptr";
 		g_logger().error("[Weapon::executeUseWeapon - Player {} weaponId {}]"
 		                 "Call stack overflow. Too many lua script calls being nested.",
@@ -365,7 +367,7 @@ bool Weapon::executeUseWeapon(std::shared_ptr<Player> player, const LuaVariant &
 		return false;
 	}
 
-	ScriptEnvironment* env = getScriptInterface()->getScriptEnv();
+	ScriptEnvironment* env = LuaScriptInterface::getScriptEnv();
 	env->setScriptId(getScriptId(), getScriptInterface());
 
 	lua_State* L = getScriptInterface()->getLuaState();
@@ -373,12 +375,12 @@ bool Weapon::executeUseWeapon(std::shared_ptr<Player> player, const LuaVariant &
 	getScriptInterface()->pushFunction(getScriptId());
 	LuaScriptInterface::pushUserdata<Player>(L, player);
 	LuaScriptInterface::setMetatable(L, -1, "Player");
-	getScriptInterface()->pushVariant(L, var);
+	LuaScriptInterface::pushVariant(L, var);
 
 	return getScriptInterface()->callFunction(2);
 }
 
-void Weapon::decrementItemCount(std::shared_ptr<Item> item) {
+void Weapon::decrementItemCount(const std::shared_ptr<Item> &item) {
 	uint16_t count = item->getItemCount();
 	if (count > 1) {
 		g_game().transformItem(item, item->getID(), count - 1);
@@ -445,7 +447,7 @@ void WeaponMelee::configureWeapon(const ItemType &it) {
 	Weapon::configureWeapon(it);
 }
 
-bool WeaponMelee::useWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> item, std::shared_ptr<Creature> target) const {
+bool WeaponMelee::useWeapon(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, const std::shared_ptr<Creature> &target) const {
 	int32_t damageModifier = playerWeaponCheck(player, target, item->getShootRange());
 	if (damageModifier == 0) {
 		return false;
@@ -505,7 +507,7 @@ bool WeaponMelee::useWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item
 	return true;
 }
 
-bool WeaponMelee::getSkillType(std::shared_ptr<Player> player, std::shared_ptr<Item> item, skills_t &skill, uint32_t &skillpoint) const {
+bool WeaponMelee::getSkillType(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, skills_t &skill, uint32_t &skillpoint) const {
 	if (player->getAddAttackSkill() && player->getLastAttackBlockType() != BLOCK_IMMUNITY) {
 		skillpoint = 1;
 	} else {
@@ -535,7 +537,7 @@ bool WeaponMelee::getSkillType(std::shared_ptr<Player> player, std::shared_ptr<I
 	return false;
 }
 
-int32_t WeaponMelee::getElementDamage(std::shared_ptr<Player> player, std::shared_ptr<Creature>, std::shared_ptr<Item> item) const {
+int32_t WeaponMelee::getElementDamage(const std::shared_ptr<Player> &player, std::shared_ptr<Creature>, std::shared_ptr<Item> item) const {
 	if (elementType == COMBAT_NONE) {
 		return 0;
 	}
@@ -555,7 +557,7 @@ int16_t WeaponMelee::getElementDamageValue() const {
 	return elementDamage;
 }
 
-int32_t WeaponMelee::getWeaponDamage(std::shared_ptr<Player> player, std::shared_ptr<Creature>, std::shared_ptr<Item> item, bool maxDamage /*= false*/) const {
+int32_t WeaponMelee::getWeaponDamage(const std::shared_ptr<Player> &player, std::shared_ptr<Creature>, std::shared_ptr<Item> item, bool maxDamage /*= false*/) const {
 	using namespace std;
 	int32_t attackSkill = player->getWeaponSkill(item);
 	int32_t attackValue = std::max<int32_t>(0, item->getAttack());
@@ -595,7 +597,7 @@ void WeaponDistance::configureWeapon(const ItemType &it) {
 	Weapon::configureWeapon(it);
 }
 
-bool WeaponDistance::useWeapon(std::shared_ptr<Player> player, std::shared_ptr<Item> item, std::shared_ptr<Creature> target) const {
+bool WeaponDistance::useWeapon(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &item, const std::shared_ptr<Creature> &target) const {
 	int32_t damageModifier;
 	const ItemType &it = Item::items[id];
 	if (it.weaponType == WEAPON_AMMO) {
@@ -771,7 +773,7 @@ bool WeaponDistance::useWeapon(std::shared_ptr<Player> player, std::shared_ptr<I
 	return true;
 }
 
-int32_t WeaponDistance::getElementDamage(std::shared_ptr<Player> player, std::shared_ptr<Creature> target, std::shared_ptr<Item> item) const {
+int32_t WeaponDistance::getElementDamage(const std::shared_ptr<Player> &player, std::shared_ptr<Creature> target, std::shared_ptr<Item> item) const {
 	if (elementType == COMBAT_NONE) {
 		return 0;
 	}
@@ -806,7 +808,7 @@ int16_t WeaponDistance::getElementDamageValue() const {
 	return elementDamage;
 }
 
-int32_t WeaponDistance::getWeaponDamage(std::shared_ptr<Player> player, std::shared_ptr<Creature> target, std::shared_ptr<Item> item, bool maxDamage /*= false*/) const {
+int32_t WeaponDistance::getWeaponDamage(const std::shared_ptr<Player> &player, std::shared_ptr<Creature> target, std::shared_ptr<Item> item, bool maxDamage /*= false*/) const {
 	int32_t attackValue = item->getAttack();
 	bool hasElement = false;
 
@@ -848,7 +850,7 @@ int32_t WeaponDistance::getWeaponDamage(std::shared_ptr<Player> player, std::sha
 	return -normal_random(minValue, (maxValue * static_cast<int32_t>(player->getVocation()->distDamageMultiplier)));
 }
 
-bool WeaponDistance::getSkillType(std::shared_ptr<Player> player, std::shared_ptr<Item>, skills_t &skill, uint32_t &skillpoint) const {
+bool WeaponDistance::getSkillType(const std::shared_ptr<Player> &player, const std::shared_ptr<Item> &, skills_t &skill, uint32_t &skillpoint) const {
 	skill = SKILL_DISTANCE;
 
 	if (player->getAddAttackSkill()) {
@@ -881,7 +883,7 @@ void WeaponWand::configureWeapon(const ItemType &it) {
 	Weapon::configureWeapon(it);
 }
 
-int32_t WeaponWand::getWeaponDamage(std::shared_ptr<Player> player, std::shared_ptr<Creature>, std::shared_ptr<Item>, bool maxDamage /* = false*/) const {
+int32_t WeaponWand::getWeaponDamage(const std::shared_ptr<Player> &player, std::shared_ptr<Creature>, std::shared_ptr<Item>, bool maxDamage /* = false*/) const {
 	if (!g_configManager().getBoolean(TOGGLE_CHAIN_SYSTEM, __FUNCTION__)) {
 		// Returns maximum damage or a random value between minChange and maxChange
 		return maxDamage ? -maxChange : -normal_random(minChange, maxChange);

@@ -31,7 +31,7 @@ void Teleport::serializeAttr(PropWriteStream &propWriteStream) const {
 	propWriteStream.write<uint8_t>(destPos.z);
 }
 
-ReturnValue Teleport::queryAdd(int32_t, const std::shared_ptr<Thing> &, uint32_t, uint32_t, std::shared_ptr<Creature>) {
+ReturnValue Teleport::queryAdd(int32_t, const std::shared_ptr<Thing> &, uint32_t, uint32_t, const std::shared_ptr<Creature> &) {
 	return RETURNVALUE_NOTPOSSIBLE;
 }
 
@@ -39,7 +39,7 @@ ReturnValue Teleport::queryMaxCount(int32_t, const std::shared_ptr<Thing> &, uin
 	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-ReturnValue Teleport::queryRemove(const std::shared_ptr<Thing> &, uint32_t, uint32_t, std::shared_ptr<Creature> /*= nullptr */) {
+ReturnValue Teleport::queryRemove(const std::shared_ptr<Thing> &, uint32_t, uint32_t, const std::shared_ptr<Creature> & /*= nullptr */) {
 	return RETURNVALUE_NOERROR;
 }
 
@@ -47,7 +47,7 @@ std::shared_ptr<Cylinder> Teleport::queryDestination(int32_t &, const std::share
 	return getTeleport();
 }
 
-bool Teleport::checkInfinityLoop(std::shared_ptr<Tile> destTile) {
+bool Teleport::checkInfinityLoop(const std::shared_ptr<Tile> &destTile) {
 	if (!destTile) {
 		return false;
 	}
@@ -66,7 +66,7 @@ void Teleport::addThing(std::shared_ptr<Thing> thing) {
 	return addThing(0, thing);
 }
 
-void Teleport::addThing(int32_t, std::shared_ptr<Thing> thing) {
+void Teleport::addThing(int32_t, const std::shared_ptr<Thing> &thing) {
 	if (!thing) {
 		return;
 	}
@@ -95,7 +95,7 @@ void Teleport::addThing(int32_t, std::shared_ptr<Thing> thing) {
 			g_game().addMagicEffect(origPos, effect);
 			g_game().addMagicEffect(destTile->getPosition(), effect);
 		}
-	} else if (std::shared_ptr<Item> item = thing->getItem()) {
+	} else if (const auto item = thing->getItem()) {
 		if (effect != CONST_ME_NONE) {
 			g_game().addMagicEffect(destTile->getPosition(), effect);
 			g_game().addMagicEffect(item->getPosition(), effect);
@@ -104,22 +104,22 @@ void Teleport::addThing(int32_t, std::shared_ptr<Thing> thing) {
 	}
 }
 
-void Teleport::updateThing(std::shared_ptr<Thing>, uint16_t, uint32_t) {
+void Teleport::updateThing(const std::shared_ptr<Thing> &, uint16_t, uint32_t) {
 	//
 }
 
-void Teleport::replaceThing(uint32_t, std::shared_ptr<Thing>) {
+void Teleport::replaceThing(uint32_t, const std::shared_ptr<Thing> &) {
 	//
 }
 
-void Teleport::removeThing(std::shared_ptr<Thing>, uint32_t) {
+void Teleport::removeThing(const std::shared_ptr<Thing> &, uint32_t) {
 	//
 }
 
-void Teleport::postAddNotification(std::shared_ptr<Thing> thing, std::shared_ptr<Cylinder> oldParent, int32_t index, CylinderLink_t) {
+void Teleport::postAddNotification(const std::shared_ptr<Thing> &thing, const std::shared_ptr<Cylinder> &oldParent, int32_t index, CylinderLink_t) {
 	getParent()->postAddNotification(thing, oldParent, index, LINK_PARENT);
 }
 
-void Teleport::postRemoveNotification(std::shared_ptr<Thing> thing, std::shared_ptr<Cylinder> newParent, int32_t index, CylinderLink_t) {
+void Teleport::postRemoveNotification(const std::shared_ptr<Thing> &thing, const std::shared_ptr<Cylinder> &newParent, int32_t index, CylinderLink_t) {
 	getParent()->postRemoveNotification(thing, newParent, index, LINK_PARENT);
 }

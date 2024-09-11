@@ -83,7 +83,7 @@ bool Raids::loadFromXml() {
 
 		auto newRaid = std::make_shared<Raid>(name, interval, margin, repeat);
 		if (newRaid->loadFromXml(g_configManager().getString(DATA_DIRECTORY, __FUNCTION__) + "/raids/" + file)) {
-			raidList.push_back(newRaid);
+			raidList.emplace_back(newRaid);
 		} else {
 			g_logger().error("{} - Failed to load raid: {}", __FUNCTION__, name);
 		}
@@ -199,7 +199,7 @@ bool Raid::loadFromXml(const std::string &filename) {
 		}
 
 		if (event->configureRaidEvent(eventNode)) {
-			raidEvents.push_back(event);
+			raidEvents.emplace_back(event);
 		} else {
 			g_logger().error("{} - "
 			                 "In file: {}, eventNode: {}",
@@ -208,7 +208,7 @@ bool Raid::loadFromXml(const std::string &filename) {
 	}
 
 	// sort by delay time
-	std::sort(raidEvents.begin(), raidEvents.end(), [](const std::shared_ptr<RaidEvent> lhs, const std::shared_ptr<RaidEvent> rhs) {
+	std::sort(raidEvents.begin(), raidEvents.end(), [](const std::shared_ptr<RaidEvent> &lhs, const std::shared_ptr<RaidEvent> &rhs) {
 		return lhs->getDelay() < rhs->getDelay();
 	});
 
@@ -229,7 +229,7 @@ void Raid::startRaid() {
 	}
 }
 
-void Raid::executeRaidEvent(const std::shared_ptr<RaidEvent> raidEvent) {
+void Raid::executeRaidEvent(const std::shared_ptr<RaidEvent> &raidEvent) {
 	if (raidEvent->executeEvent()) {
 		nextEvent++;
 		const auto newRaidEvent = getNextRaidEvent();
@@ -398,7 +398,7 @@ bool AreaSpawnEvent::configureRaidEvent(const pugi::xml_node &eventNode) {
 
 	pugi::xml_attribute attr;
 	if ((attr = eventNode.attribute("radius"))) {
-		int32_t radius = pugi::cast<int32_t>(attr.value());
+		auto radius = pugi::cast<int32_t>(attr.value());
 		Position centerPos;
 
 		if ((attr = eventNode.attribute("centerx"))) {
@@ -593,14 +593,14 @@ std::string ScriptEvent::getScriptEventName() const {
 
 bool ScriptEvent::executeEvent() {
 	// onRaid()
-	if (!scriptInterface->reserveScriptEnv()) {
+	if (!LuaScriptInterface::reserveScriptEnv()) {
 		g_logger().error("{} - Script with name {} "
 		                 "Call stack overflow. Too many lua script calls being nested.",
 		                 __FUNCTION__, getScriptName());
 		return false;
 	}
 
-	ScriptEnvironment* env = scriptInterface->getScriptEnv();
+	ScriptEnvironment* env = LuaScriptInterface::getScriptEnv();
 	env->setScriptId(scriptId, scriptInterface);
 
 	scriptInterface->pushFunction(scriptId);

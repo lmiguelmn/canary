@@ -610,10 +610,10 @@ int SpellFunctions::luaSpellVocation(lua_State* L) {
 		} else {
 			int parameters = lua_gettop(L) - 1; // - 1 because self is a parameter aswell, which we want to skip ofc
 			for (int i = 0; i < parameters; ++i) {
-				if (getString(L, 2 + i).find(";") != std::string::npos) {
+				if (getString(L, 2 + i).find(';') != std::string::npos) {
 					std::vector<std::string> vocList = explodeString(getString(L, 2 + i), ";");
 					int32_t vocationId = g_vocations().getVocationId(vocList[0]);
-					if (vocList.size() > 0) {
+					if (!vocList.empty()) {
 						if (vocList[1] == "true") {
 							spell->addVocMap(vocationId, true);
 						} else {
@@ -650,7 +650,7 @@ int SpellFunctions::luaSpellWords(lua_State* L) {
 			pushString(L, spell->getSeparator());
 			return 2;
 		} else {
-			std::string sep = "";
+			std::string sep;
 			if (lua_gettop(L) == 3) {
 				sep = getString(L, 3);
 			}

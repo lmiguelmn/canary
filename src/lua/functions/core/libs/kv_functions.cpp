@@ -96,7 +96,7 @@ int KVFunctions::luaKVRemove(lua_State* L) {
 int KVFunctions::luaKVKeys(lua_State* L) {
 	// KV.keys([prefix = ""]) | scopedKV:keys([prefix = ""])
 	std::unordered_set<std::string> keys;
-	std::string prefix = "";
+	std::string prefix;
 
 	if (isString(L, -1)) {
 		prefix = getString(L, -1);
@@ -138,7 +138,7 @@ std::optional<ValueWrapper> KVFunctions::getValueWrapper(lua_State* L) {
 				g_logger().warn("[{}] invalid param type", __FUNCTION__);
 				return std::nullopt;
 			}
-			array.push_back(value.value());
+			array.emplace_back(value.value());
 			lua_pop(L, 1);
 		}
 		return ValueWrapper(array);

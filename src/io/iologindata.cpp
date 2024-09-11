@@ -7,6 +7,8 @@
  * Website: https://docs.opentibiabr.com/
  */
 
+#include <utility>
+
 #include "pch.hpp"
 
 #include "io/iologindata.hpp"
@@ -19,7 +21,7 @@
 #include "enums/account_type.hpp"
 #include "enums/account_errors.hpp"
 
-bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, const std::string &password, std::string &characterName, uint32_t &accountId, bool oldProtocol) {
+bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, const std::string &password, std::string &characterName, uint32_t &accountId, bool oldProtocol, const uint32_t ip) {
 	Account account(accountDescriptor);
 	account.setProtocolCompat(oldProtocol);
 
@@ -36,6 +38,11 @@ bool IOLoginData::gameWorldAuthentication(const std::string &accountDescriptor, 
 		if (!account.authenticate(password)) {
 			return false;
 		}
+	}
+
+	if (!g_accountRepository().getCharacterByNameAndAccountId(account.getID(), characterName)) {
+		g_logger().warn("IP [{}] trying to connect into another account character", convertIPToString(ip));
+		return false;
 	}
 
 	if (AccountErrors_t::Ok != enumFromValue<AccountErrors_t>(account.load())) {
@@ -90,21 +97,21 @@ void IOLoginData::updateOnlineStatus(uint32_t guid, bool login) {
 }
 
 // The boolean "disableIrrelevantInfo" will deactivate the loading of information that is not relevant to the preload, for example, forge, bosstiary, etc. None of this we need to access if the player is offline
-bool IOLoginData::loadPlayerById(std::shared_ptr<Player> player, uint32_t id, bool disableIrrelevantInfo /* = true*/) {
+bool IOLoginData::loadPlayerById(const std::shared_ptr<Player> &player, uint32_t id, bool disableIrrelevantInfo /* = true*/) {
 	Database &db = Database::getInstance();
 	std::ostringstream query;
 	query << "SELECT * FROM `players` WHERE `id` = " << id;
 	return loadPlayer(player, db.storeQuery(query.str()), disableIrrelevantInfo);
 }
 
-bool IOLoginData::loadPlayerByName(std::shared_ptr<Player> player, const std::string &name, bool disableIrrelevantInfo /* = true*/) {
+bool IOLoginData::loadPlayerByName(const std::shared_ptr<Player> &player, const std::string &name, bool disableIrrelevantInfo /* = true*/) {
 	Database &db = Database::getInstance();
 	std::ostringstream query;
 	query << "SELECT * FROM `players` WHERE `name` = " << db.escapeString(name);
 	return loadPlayer(player, db.storeQuery(query.str()), disableIrrelevantInfo);
 }
 
-bool IOLoginData::loadPlayer(std::shared_ptr<Player> player, DBResult_ptr result, bool disableIrrelevantInfo /* = false*/) {
+bool IOLoginData::loadPlayer(const std::shared_ptr<Player> &player, const DBResult_ptr &result, bool disableIrrelevantInfo /* = false*/) {
 	if (!result || !player) {
 		std::string nullptrType = !result ? "Result" : "Player";
 		g_logger().warn("[{}] - {} is nullptr", __FUNCTION__, nullptrType);
@@ -198,7 +205,7 @@ bool IOLoginData::loadPlayer(std::shared_ptr<Player> player, DBResult_ptr result
 	}
 }
 
-bool IOLoginData::savePlayer(std::shared_ptr<Player> player) {
+bool IOLoginData::savePlayer(const std::shared_ptr<Player> &player) {
 	bool success = DBTransaction::executeWithinTransaction([player]() {
 		return savePlayerGuard(player);
 	});
@@ -210,7 +217,7 @@ bool IOLoginData::savePlayer(std::shared_ptr<Player> player) {
 	return success;
 }
 
-bool IOLoginData::savePlayerGuard(std::shared_ptr<Player> player) {
+bool IOLoginData::savePlayerGuard(const std::shared_ptr<Player> &player) {
 	if (!player) {
 		throw DatabaseException("Player nullptr in function: " + std::string(__FUNCTION__));
 	}
@@ -283,7 +290,7 @@ std::string IOLoginData::getNameByGuid(uint32_t guid) {
 	query << "SELECT `name` FROM `players` WHERE `id` = " << guid;
 	DBResult_ptr result = Database::getInstance().storeQuery(query.str());
 	if (!result) {
-		return std::string();
+		return {};
 	}
 	return result->getString("name");
 }

@@ -2,13 +2,15 @@ cmake_minimum_required(VERSION 3.22 FATAL_ERROR)
 
 # Base configurations and settings for the project
 include(BaseConfig)
+include(CheckSIMDSupport)
 include(GNUInstallDirs)
 
 # Import configurations, source definitions, and linker settings
 include(CanaryLib)
 
 # Define main executable target, set it up and link to main library
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} main.cpp
+        utils/counter_pointer.hpp)
 
 if(MSVC)
     # Add executable icon for Windows

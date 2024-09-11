@@ -31,7 +31,7 @@ enum class DispatcherType : uint8_t {
 };
 
 struct DispatcherContext {
-	bool isOn() const {
+	static bool isOn() {
 		return OTSYS_TIME() != 0;
 	}
 
@@ -56,10 +56,10 @@ struct DispatcherContext {
 	}
 
 	// postpone the event
-	void addEvent(std::function<void(void)> &&f) const;
+	void addEvent(std::function<void(void)> &&f, std::string_view context) const;
 
 	// if the context is async, the event will be postponed, if not, it will be executed immediately.
-	void tryAddEvent(std::function<void(void)> &&f) const;
+	void tryAddEvent(std::function<void(void)> &&f, std::string_view context) const;
 
 private:
 	void reset() {
@@ -70,7 +70,7 @@ private:
 
 	DispatcherType type = DispatcherType::None;
 	TaskGroup group = TaskGroup::ThreadPool;
-	std::string_view taskName = "";
+	std::string_view taskName;
 
 	friend class Dispatcher;
 };
@@ -88,9 +88,10 @@ public:
 		for (uint_fast16_t i = 0; i < threads.capacity(); ++i) {
 			threads.emplace_back(std::make_unique<ThreadTask>());
 		}
-	};
 
-	// Ensures that we don't accidentally copy it
+		scheduledTasksRef.reserve(2000);
+	}
+
 	Dispatcher(const Dispatcher &) = delete;
 	Dispatcher operator=(const Dispatcher &) = delete;
 
@@ -128,7 +129,7 @@ public:
 
 	void stopEvent(uint64_t eventId);
 
-	const auto &context() const {
+	const auto &context() {
 		return dispacherContext;
 	}
 
@@ -150,11 +151,11 @@ private:
 
 	inline void mergeAsyncEvents();
 	inline void mergeEvents();
-	inline void executeEvents(const TaskGroup startGroup = TaskGroup::Serial);
+	inline void executeEvents(TaskGroup startGroup = TaskGroup::Serial);
 	inline void executeScheduledEvents();
 
 	inline void executeSerialEvents(std::vector<Task> &tasks);
-	inline void executeParallelEvents(std::vector<Task> &tasks, const uint8_t groupId);
+	inline void executeParallelEvents(std::vector<Task> &tasks, uint8_t groupId);
 	inline std::chrono::milliseconds timeUntilNextScheduledTask() const;
 
 	inline void checkPendingTasks() {
@@ -195,9 +196,8 @@ private:
 	ThreadPool &threadPool;
 	std::condition_variable signalSchedule;
 	std::atomic_bool hasPendingTasks = false;
-	std::mutex dummyMutex; // This is only used for signaling the condition variable and not as an actual lock.
+	std::mutex dummyMutex;
 
-	// Thread Events
 	struct ThreadTask {
 		ThreadTask() {
 			for (auto &task : tasks) {
@@ -207,12 +207,11 @@ private:
 		}
 
 		std::array<std::vector<Task>, static_cast<uint8_t>(TaskGroup::Last)> tasks;
-		std::vector<std::shared_ptr<Task>> scheduledTasks;
+		phmap::parallel_flat_hash_set_m<std::shared_ptr<Task>> scheduledTasks;
 		std::mutex mutex;
 	};
-	std::vector<std::unique_ptr<ThreadTask>> threads;
 
-	// Main Events
+	std::vector<std::unique_ptr<ThreadTask>> threads;
 	std::array<std::vector<Task>, static_cast<uint8_t>(TaskGroup::Last)> m_tasks;
 	phmap::btree_multiset<std::shared_ptr<Task>, Task::Compare> scheduledTasks;
 	phmap::parallel_flat_hash_map_m<uint64_t, std::shared_ptr<Task>> scheduledTasksRef;

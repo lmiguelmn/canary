@@ -25,7 +25,7 @@ class Creature;
 int GlobalFunctions::luaDoPlayerAddItem(lua_State* L) {
 	// doPlayerAddItem(cid, itemid, <optional: default: 1> count/subtype, <optional: default: 1> canDropOnMap)
 	// doPlayerAddItem(cid, itemid, <optional: default: 1> count, <optional: default: 1> canDropOnMap, <optional: default: 1>subtype)
-	std::shared_ptr<Player> player = getPlayer(L, 1);
+	const auto &player = getPlayer(L, 1);
 	if (!player) {
 		reportErrorFunc(getErrorDesc(LUA_ERROR_PLAYER_NOT_FOUND));
 		pushBoolean(L, false);
@@ -33,9 +33,9 @@ int GlobalFunctions::luaDoPlayerAddItem(lua_State* L) {
 	}
 
 	uint16_t itemId = getNumber<uint16_t>(L, 2);
-	int32_t count = getNumber<int32_t>(L, 3, 1);
+	auto count = getNumber<int32_t>(L, 3, 1);
 	bool canDropOnMap = getBoolean(L, 4, true);
-	uint16_t subType = getNumber<uint16_t>(L, 5, 1);
+	auto subType = getNumber<uint16_t>(L, 5, 1);
 
 	const ItemType &it = Item::items[itemId];
 	int32_t itemCount;
@@ -133,7 +133,7 @@ int GlobalFunctions::luaDoAddContainerItem(lua_State* L) {
 
 	int32_t itemCount = 1;
 	int32_t subType = 1;
-	uint32_t count = getNumber<uint32_t>(L, 3, 1);
+	auto count = getNumber<uint32_t>(L, 3, 1);
 
 	if (it.hasSubType()) {
 		if (it.stackable) {
@@ -286,7 +286,7 @@ int GlobalFunctions::luaDoAreaCombatHealth(lua_State* L) {
 		damage.instantSpellName = getString(L, 9);
 		damage.runeSpellName = getString(L, 10);
 		if (creature) {
-			if (auto player = creature->getPlayer()) {
+			if (const auto &player = creature->getPlayer()) {
 				player->wheel()->getCombatDataSpell(damage);
 			}
 		}
@@ -330,7 +330,7 @@ int GlobalFunctions::luaDoTargetCombatHealth(lua_State* L) {
 	damage.instantSpellName = getString(L, 9);
 	damage.runeSpellName = getString(L, 10);
 	if (creature) {
-		if (auto player = creature->getPlayer()) {
+		if (const auto &player = creature->getPlayer()) {
 			player->wheel()->getCombatDataSpell(damage);
 		}
 	}
@@ -368,7 +368,7 @@ int GlobalFunctions::luaDoAreaCombatMana(lua_State* L) {
 		damage.instantSpellName = getString(L, 8);
 		damage.runeSpellName = getString(L, 9);
 		if (creature) {
-			if (auto player = creature->getPlayer()) {
+			if (const auto &player = creature->getPlayer()) {
 				player->wheel()->getCombatDataSpell(damage);
 			}
 		}
@@ -413,7 +413,7 @@ int GlobalFunctions::luaDoTargetCombatMana(lua_State* L) {
 	damage.instantSpellName = getString(L, 7);
 	damage.runeSpellName = getString(L, 8);
 	if (creature) {
-		if (auto player = creature->getPlayer()) {
+		if (const auto &player = creature->getPlayer()) {
 			player->wheel()->getCombatDataSpell(damage);
 		}
 	}
@@ -586,7 +586,7 @@ int GlobalFunctions::luaAddEvent(lua_State* L) {
 
 			LuaData_t type = getNumber<LuaData_t>(L, -1);
 			if (type != LuaData_t::Unknown && type <= LuaData_t::Npc) {
-				indexes.push_back({ i, type });
+				indexes.emplace_back(i, type);
 			}
 			lua_pop(globalState, 2);
 		}
@@ -652,7 +652,7 @@ int GlobalFunctions::luaAddEvent(lua_State* L) {
 
 	LuaTimerEventDesc eventDesc;
 	for (int i = 0; i < parameters - 2; ++i) { // -2 because addEvent needs at least two parameters
-		eventDesc.parameters.push_back(luaL_ref(globalState, LUA_REGISTRYINDEX));
+		eventDesc.parameters.emplace_back(luaL_ref(globalState, LUA_REGISTRYINDEX));
 	}
 
 	uint32_t delay = std::max<uint32_t>(100, getNumber<uint32_t>(globalState, 2));
@@ -858,7 +858,7 @@ bool GlobalFunctions::getArea(lua_State* L, std::list<uint32_t> &list, uint32_t 
 			if (!isNumber(L, -1)) {
 				return false;
 			}
-			list.push_back(getNumber<uint32_t>(L, -1));
+			list.emplace_back(getNumber<uint32_t>(L, -1));
 			lua_pop(L, 1);
 		}
 

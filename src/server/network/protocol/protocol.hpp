@@ -14,7 +14,7 @@
 
 class Protocol : public std::enable_shared_from_this<Protocol> {
 public:
-	explicit Protocol(Connection_ptr initConnection) :
+	explicit Protocol(const Connection_ptr &initConnection) :
 		connectionPtr(initConnection) { }
 
 	virtual ~Protocol() = default;
@@ -57,7 +57,7 @@ public:
 
 protected:
 	void disconnect() const {
-		if (auto connection = getConnection()) {
+		if (const auto connection = getConnection()) {
 			connection->close();
 		}
 	}
@@ -66,8 +66,19 @@ protected:
 		encryptionEnabled = true;
 	}
 	void setXTEAKey(const uint32_t* newKey) {
-		memcpy(this->key.data(), newKey, sizeof(*newKey) * 4);
+		uint32_t* dst = this->key.data();
+
+#if defined(__AVX2__)
+		const __m128i avx_key = _mm_loadu_si128(reinterpret_cast<const __m128i*>(newKey));
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(dst), avx_key);
+#elif defined(__SSE2__)
+		__m128i sse_key = _mm_loadu_si128(reinterpret_cast<const __m128i*>(newKey));
+		_mm_storeu_si128(reinterpret_cast<__m128i*>(dst), sse_key);
+#else
+		memcpy(dst, newKey, sizeof(uint32_t) * 4);
+#endif
 	}
+
 	void setChecksumMethod(ChecksumMethods_t method) {
 		checksumMethod = method;
 	}
@@ -107,6 +118,83 @@ private:
 		std::array<char, NETWORKMESSAGE_MAXSIZE> buffer {};
 	};
 
+	struct AlignedFreeDeleter {
+		void operator()(uint8_t* ptr) const {
+			if (ptr) {
+#ifdef _WIN32
+				_aligned_free(ptr); // Liberar memória no Windows
+#else
+				std::free(ptr); // Liberar memória no Linux/Unix
+#endif
+			}
+		}
+	};
+
+	inline uint8_t* aligned_alloc_memory(size_t size, size_t alignment) const {
+#ifdef _WIN32
+		return static_cast<uint8_t*>(_aligned_malloc(size, alignment));
+#else
+		uint8_t* originalMemory = nullptr;
+
+		// Tenta alocar memória alinhada com posix_memalign
+		if (posix_memalign(reinterpret_cast<void**>(&originalMemory), alignment, size) != 0) {
+			return nullptr; // Alocação falhou
+		}
+
+		// Verifique se a memória está alinhada
+		if (!is_aligned(originalMemory, alignment)) {
+			// A memória não está devidamente alinhada, ajustar manualmente
+			uintptr_t address = reinterpret_cast<uintptr_t>(originalMemory);
+			uintptr_t alignedAddress = (address + alignment - 1) & ~(alignment - 1);
+			return reinterpret_cast<uint8_t*>(alignedAddress);
+		}
+
+		return originalMemory; // A memória já está alinhada
+#endif
+	}
+
+	// Função para verificar o alinhamento usando SIMD
+	inline bool is_aligned(const void* ptr, size_t alignment) const {
+		return _mm_testz_si128(_mm_set1_epi64x(reinterpret_cast<uintptr_t>(ptr)), _mm_set1_epi64x(alignment - 1));
+	}
+
+	// Função de cópia usando AVX2 com verificação de alinhamento
+	inline void simd_memcpy_avx2(uint8_t* __restrict dest, const uint8_t* __restrict src, size_t len) const {
+		size_t i = 0;
+
+		// Verifica se src e dest estão ambos alinhados para 32 bytes
+		const bool src_aligned = is_aligned(src, 32);
+		const bool dest_aligned = is_aligned(dest, 32);
+
+		if (src_aligned && dest_aligned) {
+			// Alinhado: Usar as instruções AVX2 alinhadas
+			for (; i + 32 <= len; i += 32) {
+				const __m256i data = _mm256_load_si256(reinterpret_cast<const __m256i*>(src + i));
+				_mm256_store_si256(reinterpret_cast<__m256i*>(dest + i), data);
+			}
+		} else {
+			// Desalinhado: Usar as instruções AVX2 desalinhadas
+			for (; i + 32 <= len; i += 32) {
+				const __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + i));
+				_mm256_storeu_si256(reinterpret_cast<__m256i*>(dest + i), data);
+			}
+		}
+
+		// Copiar os bytes restantes
+		for (; i < len; ++i) {
+			dest[i] = src[i];
+		}
+	}
+
+	void precacheControlSumsEncrypt() const;
+	void precacheControlSumsDecrypt() const;
+
+	mutable std::array<uint32_t, 32 * 2> cachedControlSumsEncrypt {};
+	mutable std::array<uint32_t, 32 * 2> cachedControlSumsDecrypt {};
+	mutable bool cacheEncryptInitialized = false;
+	mutable bool cacheDecryptInitialized = false;
+	mutable std::array<uint32_t, 4> key {};
+
 	void XTEA_encrypt(OutputMessage &msg) const;
 	bool XTEA_decrypt(NetworkMessage &msg) const;
 	bool compression(OutputMessage &msg) const;
@@ -114,7 +202,6 @@ private:
 	OutputMessage_ptr outputBuffer;
 
 	const ConnectionWeak_ptr connectionPtr;
-	std::array<uint32_t, 4> key = {};
 	uint32_t serverSequenceNumber = 0;
 	uint32_t clientSequenceNumber = 0;
 	std::underlying_type_t<ChecksumMethods_t> checksumMethod = CHECKSUM_METHOD_NONE;
