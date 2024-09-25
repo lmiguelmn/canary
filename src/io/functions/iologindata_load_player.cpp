@@ -828,6 +828,30 @@ void IOLoginDataLoad::loadPlayerForgeHistory(std::shared_ptr<Player> player, DBR
 	}
 }
 
+void IOLoginDataLoad::loadPlayerStoreHistory(std::shared_ptr<Player> player, DBResult_ptr result) {
+	if (!result || !player) {
+		g_logger().warn("[IOLoginData::loadPlayer] - Player or Result nullptr: {}", __FUNCTION__);
+		return;
+	}
+
+	std::ostringstream query;
+	query << "SELECT * FROM `store_history` WHERE `account_id` = " << player->getAccountId();
+	if (result = Database::getInstance().storeQuery(query.str())) {
+		do {
+			StoreHistory history;
+			history.description = result->getString("description");
+			history.coinAmount = result->getNumber<int32_t>("coin_amount");
+			history.coinType = result->getNumber<CoinType>("coin_type");
+			history.historyType = result->getNumber<HistoryTypes_t>("type");
+			history.createdAt = result->getNumber<time_t>("created_at");
+			history.playerName = result->getString("player_name");
+			history.totalPrice = result->getNumber<int32_t>("total_price");
+			history.fromMarket = result->getNumber<uint32_t>("show_detail");
+			player->setStoreHistory(history);
+		} while (result->next());
+	}
+}
+
 void IOLoginDataLoad::loadPlayerBosstiary(std::shared_ptr<Player> player, DBResult_ptr result) {
 	if (!result) {
 		g_logger().warn("[IOLoginData::loadPlayer] - Result nullptr: {}", __FUNCTION__);

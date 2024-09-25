@@ -93,6 +93,19 @@ struct ForgeHistory {
 	std::string secondItemName;
 };
 
+struct StoreHistory {
+	time_t createdAt {};
+
+	int32_t coinAmount {};
+	CoinType coinType {};
+	HistoryTypes_t historyType {};
+	uint64_t totalPrice {};
+
+	std::string description {};
+	std::string playerName {};
+	bool fromMarket = false;
+};
+
 struct OpenContainer {
 	std::shared_ptr<Container> container;
 	uint16_t index;
@@ -158,6 +171,9 @@ public:
 	}
 	void setName(const std::string &name) {
 		this->name = name;
+	}
+	void setNewName(const std::string &newName) {
+		this->newName = newName;
 	}
 	const std::string &getTypeName() const override {
 		return name;
@@ -1574,9 +1590,9 @@ public:
 			client->sendExperienceTracker(rawExp, finalExp);
 		}
 	}
-	void sendOutfitWindow() {
+	void sendOutfitWindow(uint16_t tryOutfit = 0, uint16_t tryMount = 0) {
 		if (client) {
-			client->sendOutfitWindow();
+			client->sendOutfitWindow(tryOutfit, tryMount);
 		}
 	}
 	// Imbuements
@@ -2657,6 +2673,16 @@ public:
 
 	uint16_t getPlayerVocationEnum() const;
 
+	// Store functions
+	void openStore();
+	void sendStoreHistory(uint32_t page) const;
+	void sendStoreSuccess(const std::string &successMessage);
+	void sendStoreError(StoreErrors_t errorType, const std::string &errorMessage);
+	std::vector<StoreHistory> &getStoreHistory();
+	void setStoreHistory(const StoreHistory &history);
+	void addStoreHistory(bool fromMarket, const std::string &playerName, time_t createdAt, uint32_t coinAmount, HistoryTypes_t historyType, const std::string &description, uint64_t totalPrice = 0);
+	bool canBuyStoreOffer(const Offer* offer);
+
 private:
 	friend class PlayerLock;
 	std::mutex mutex;
@@ -2749,6 +2775,7 @@ private:
 
 	std::map<ObjectCategory_t, std::pair<std::shared_ptr<Container>, std::shared_ptr<Container>>> m_managedContainers;
 	std::vector<ForgeHistory> forgeHistoryVector;
+	std::vector<StoreHistory> storeHistoryVector;
 
 	std::vector<uint16_t> quickLootListItemIds;
 
@@ -2770,6 +2797,7 @@ private:
 	std::unordered_set<std::shared_ptr<MonsterType>> m_bosstiaryMonsterTracker;
 
 	std::string name;
+	std::string newName;
 	std::string guildNick;
 	std::string loyaltyTitle;
 
