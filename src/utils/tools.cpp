@@ -1522,6 +1522,10 @@ int64_t OTSYS_TIME(bool useTime) {
 	return OTSYSTIME;
 }
 
+int64_t OTSYS_STEADY_TIME() {
+	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 SpellGroup_t stringToSpellGroup(const std::string &value) {
 	std::string tmpStr = asLowerCaseString(value);
 	if (tmpStr == "attack" || tmpStr == "1") {
@@ -1953,4 +1957,8 @@ uint8_t convertWheelGemAffinityToDomain(uint8_t affinity) {
 			g_logger().error("Failed to get gem affinity {}", affinity);
 			return 0;
 	}
+}
+
+bool isNameLengthValid(const std::string &name) {
+	return name.length() > MIN_NAME_LENGTH && name.length() < MAX_NAME_LENGTH;
 }
